@@ -17,7 +17,7 @@ st.set_page_config(page_title="Web Monitoring IC Bali", layout="wide", page_icon
 DATA_CONTACT = {
     "NKL": [
         ("Putu IC", "087850110155"),
-        ("Pribadi IC", "087761390987")
+        ("Priyadi IC", "087761390987")
     ],
     "REPORTING": [
         ("Muklis IC", "081934327289"),
