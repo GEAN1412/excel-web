@@ -65,46 +65,59 @@ def hapus_file(public_id):
         st.error(f"Gagal menghapus: {e}")
         return False
 
-# --- 4. FUNGSI MAGIC COLOR (BACA WARNA EXCEL) ---
-def get_excel_styles(file_content, sheet_name, header_row, df_shape):
+# --- 4. FUNGSI MAGIC COLOR (PERBAIKAN ERROR KOLOM) ---
+def get_excel_styles(file_content, sheet_name, header_row, df_original):
     """
-    Fungsi ini membuka Excel, mengambil warna background, 
-    dan menyusunnya agar bisa dibaca oleh Pandas Styler.
+    Fungsi ini mengambil warna dari Excel dan memastikan
+    struktur kolomnya SAMA PERSIS dengan DataFrame pandas.
     """
     try:
-        # Buka file Excel dengan engine openpyxl
         wb = openpyxl.load_workbook(file_content, data_only=True)
         ws = wb[sheet_name]
         
-        # Siapkan wadah untuk menyimpan kode warna css
-        # Ukurannya harus sama persis dengan Dataframe
-        styles = pd.DataFrame(index=range(df_shape[0]), columns=range(df_shape[1]))
+        # PERBAIKAN DI SINI:
+        # Kita buat DataFrame kosong tapi Index dan Kolomnya meniru df_original
+        # Ini mencegah error "invalid columns labels"
+        styles = pd.DataFrame("", index=df_original.index, columns=df_original.columns)
         
-        # Mulai iterasi (Looping) sel Excel
-        # Row Excel dimulai dari header_row + 2 (karena data ada di bawah header)
-        start_row = header_row + 1 
+        # Menentukan baris awal data di Excel (Header + 1)
+        start_row_excel = header_row + 1 
         
-        # Kita batasi looping hanya pada area yang ada datanya agar tidak berat
-        for r_idx, row in enumerate(ws.iter_rows(min_row=start_row, max_row=start_row + df_shape[0] - 1, min_col=1, max_col=df_shape[1])):
-            for c_idx, cell in enumerate(row):
-                # Ambil warna fill
-                fill = cell.fill
-                if fill and fill.patternType == 'solid':
-                    fg = fill.start_color
-                    # Cek tipe warna (RGB atau Theme)
-                    if fg.type == 'rgb':
-                        # Warna RGB (Contoh: FF0000 untuk Merah)
-                        color_code = f"#{fg.rgb[2:]}" # Hapus alpha channel jika ada
-                        styles.iat[r_idx, c_idx] = f'background-color: {color_code}'
-                    elif fg.type == 'theme':
-                        # Warna Theme agak kompleks, kadang tidak terbaca sempurna
-                        # Kita beri tanda default atau skip
-                        pass
-                else:
-                    styles.iat[r_idx, c_idx] = '' # Tidak ada warna
+        # Kita loop berdasarkan ukuran DataFrame
+        # r_idx = index baris (0, 1, 2...)
+        # row_data = isi baris (tidak dipakai, kita cuma butuh indexnya)
+        for r_idx in range(len(df_original)):
+            # Tentukan posisi baris di Excel
+            current_excel_row = start_row_excel + r_idx
+            
+            # Ambil baris dari Excel
+            # (Optimasi: kita akses langsung row-nya)
+            row_cells = ws[current_excel_row]
+            
+            for c_idx in range(len(df_original.columns)):
+                # Pastikan tidak melampaui kolom yang ada di Excel
+                if c_idx < len(row_cells):
+                    cell = row_cells[c_idx]
+                    fill = cell.fill
+                    
+                    if fill and fill.patternType == 'solid':
+                        fg = fill.start_color
+                        if fg.type == 'rgb':
+                            # Warna RGB Hex
+                            # Kadang ada alpha channel di depan (misal FF000000), kita ambil 6 digit terakhir
+                            hex_code = fg.rgb
+                            if len(str(hex_code)) > 6:
+                                hex_code = str(hex_code)[2:] 
+                            
+                            color_code = f"#{hex_code}"
+                            
+                            # Masukkan ke styles menggunakan .iat (akses posisi angka)
+                            styles.iat[r_idx, c_idx] = f'background-color: {color_code}'
         
-        return styles.fillna('')
+        return styles
     except Exception as e:
+        # Jika error, return None agar kode utama tahu
+        # st.error(f"Debug Style Error: {e}") # Uncomment untuk debug
         return None
 
 # --- 5. TAMPILAN PER DIVISI ---
@@ -128,11 +141,10 @@ def tampilkan_tab_divisi(nama_divisi, folder_target, semua_files):
             url_file = dict_files[pilihan_file]
             
             try:
-                # Download file mentah ke memori (buffer) agar bisa dibaca OpenPyXL
+                # Download ke memory
                 response = requests.get(url_file)
                 file_content = io.BytesIO(response.content)
                 
-                # Cek Sheet
                 xls = pd.ExcelFile(file_content)
                 daftar_sheet = xls.sheet_names
                 
@@ -148,45 +160,53 @@ def tampilkan_tab_divisi(nama_divisi, folder_target, semua_files):
                 with col3:
                     cari = st.text_input("🔍 Cari Data:", key=f"search_{folder_target}")
 
-                # --- PROSES DATA ---
-                # 1. Baca Data (Teks/Angka)
+                # --- BACA DATA UTAMA ---
+                # Baca dataframe lengkap dulu
                 df = pd.read_excel(file_content, sheet_name=sheet_terpilih, header=header_row - 1)
                 
-                # 2. Filter Data (Jika ada pencarian)
+                # --- PROSES FILTER DATA ---
                 if cari:
+                    # Filter Data
                     mask = df.astype(str).apply(lambda x: x.str.contains(cari, case=False, na=False)).any(axis=1)
                     df_tampil = df[mask]
                 else:
                     df_tampil = df
 
-                # 3. PROSES WARNA (Hanya jika data tidak terlalu besar agar tidak hang)
-                if len(df_tampil) < 2000: # Batas aman 2000 baris
-                    with st.spinner("Sedang melukis warna sel..."):
-                        # Kita ambil style matrix penuh
-                        style_matrix = get_excel_styles(file_content, sheet_terpilih, header_row, df.shape)
+                # --- PROSES WARNA (FIXED) ---
+                tampilkan_polos = True # Default polos jika warna gagal
+                
+                if len(df_tampil) < 3000: # Batas baris agar tidak berat
+                    with st.spinner("Mencocokkan warna sel..."):
+                        # Ambil style matrix Penuh (Sesuai df asli)
+                        style_matrix = get_excel_styles(file_content, sheet_terpilih, header_row, df)
                         
                         if style_matrix is not None:
-                            # Kita filter style matrix agar sesuai dengan baris data yang difilter (Search)
-                            style_tampil = style_matrix.loc[df_tampil.index]
-                            
-                            # Gabungkan Data + Warna
-                            # Kita ganti DataFrame biasa menjadi Styler Object
-                            styler = df_tampil.style.apply(lambda x: style_tampil, axis=None)
-                            
-                            st.success(f"Menampilkan Sheet: **{sheet_terpilih}** (Warna Aktif 🎨)")
-                            st.dataframe(styler, use_container_width=True)
-                        else:
-                            # Jika gagal baca warna, tampilkan polos
-                            st.dataframe(df_tampil, use_container_width=True)
-                else:
-                    st.warning("Data terlalu banyak (>2000 baris), warna dinonaktifkan agar cepat.")
-                    st.dataframe(df_tampil, use_container_width=True)
+                            try:
+                                # Filter style matrix agar barisnya sama dengan df_tampil (hasil search)
+                                # .loc akan mencocokkan Index Baris secara otomatis
+                                style_tampil = style_matrix.loc[df_tampil.index]
+                                
+                                # Tampilkan dengan Styler
+                                st.success(f"Menampilkan Sheet: **{sheet_terpilih}** (Warna Aktif 🎨)")
+                                st.dataframe(
+                                    df_tampil.style.apply(lambda x: style_tampil, axis=None), 
+                                    use_container_width=True,
+                                    height=600
+                                )
+                                tampilkan_polos = False
+                            except Exception as e:
+                                st.warning(f"Gagal menerapkan filter warna, menampilkan data polos. ({e})")
+                
+                if tampilkan_polos:
+                    # Jika warna dimatikan atau error, tampilkan biasa
+                    st.success(f"Menampilkan Sheet: **{sheet_terpilih}**")
+                    st.dataframe(df_tampil, use_container_width=True, height=600)
                 
                 st.caption(f"Total: {len(df_tampil)} Baris")
                 
             except Exception as e:
-                st.error("Gagal membaca file.")
-                st.error(f"Detail Error: {e}")
+                st.error("Gagal membaca file atau format header salah.")
+                st.error(f"Info Error: {e}")
 
 # --- 6. PROGRAM UTAMA ---
 def main():
@@ -238,7 +258,7 @@ def main():
                             st.error(f"Error: {e}")
             
             st.markdown("---")
-            st.subheader("🗑️ Kelola / Hapus File")
+            st.subheader("🗑️ Hapus File")
             prefix_folder = folder_aktif + "/"
             file_milik_divisi = [f for f in files_list if f['public_id'].startswith(prefix_folder)]
             
@@ -252,7 +272,7 @@ def main():
                          if hapus_file(opsi_hapus[file_to_delete]):
                              st.success("Terhapus.")
                              st.rerun()
-
+            
             st.markdown("---")
             if st.button("🚪 Log Out"):
                 st.session_state['logged_in_divisi'] = None
