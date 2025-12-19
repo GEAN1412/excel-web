@@ -82,8 +82,7 @@ def hapus_file(public_id):
         st.error(f"Gagal menghapus: {e}")
         return False
 
-# --- 5. FUNGSI LOAD DATA (MODIFIKASI FORMAT) ---
-# Kita tambahkan parameter 'force_text'
+# --- 5. FUNGSI LOAD DATA (MODIFIKASI: PEMBULATAN 2 DIGIT) ---
 @st.cache_data(ttl=600, show_spinner=False)
 def load_excel_data(url, sheet_name, header_row, force_text=False):
     try:
@@ -92,15 +91,20 @@ def load_excel_data(url, sheet_name, header_row, force_text=False):
         file_content = io.BytesIO(response.content)
         
         if force_text:
-            # dtype=str memaksakan semua kolom jadi Teks (Huruf)
-            # Ini menjaga angka 0 di depan (00123) tetap ada
+            # Mode Teks: Baca semua sebagai tulisan (tanpa pembulatan)
             df = pd.read_excel(file_content, sheet_name=sheet_name, header=header_row - 1, dtype=str)
-            
-            # Membersihkan tulisan "nan" (kosong) menjadi string kosong
             df = df.fillna("")
         else:
-            # Mode Normal: Biarkan komputer menebak (Angka jadi Angka, Huruf jadi Huruf)
+            # Mode Normal (Angka):
             df = pd.read_excel(file_content, sheet_name=sheet_name, header=header_row - 1)
+            
+            # --- FITUR BARU: PEMBULATAN OTOMATIS ---
+            # Cari kolom yang isinya angka desimal (float)
+            float_cols = df.select_dtypes(include=['float', 'float64']).columns
+            
+            # Bulatkan kolom tersebut menjadi 2 digit
+            # (Otomatis mengubah 68.94977 menjadi 68.95)
+            df[float_cols] = df[float_cols].round(2)
             
         return df
     except Exception as e:
