@@ -7,11 +7,17 @@ import hashlib
 import requests
 import io
 
-# --- 1. KONFIGURASI HALAMAN ---
-st.set_page_config(page_title="Web Monitoring IC Bali", layout="wide", page_icon="🏢")
+# --- 1. KONFIGURASI HALAMAN (MEMAKSA SIDEBAR TERBUKA) ---
+st.set_page_config(
+    page_title="Web Monitoring IC Bali", 
+    layout="wide", 
+    page_icon="🏢",
+    initial_sidebar_state="expanded" # <--- INI KUNCINYA AGAR MENU KIRI MUNCUL
+)
 
 # --- 2. CSS & TEMA ---
 def atur_tema():
+    # Letakkan pengaturan tema di Sidebar bagian paling bawah
     st.sidebar.markdown("---")
     st.sidebar.caption("🎨 Pengaturan Tampilan")
     pilih_tema = st.sidebar.radio(
@@ -22,24 +28,27 @@ def atur_tema():
     elif pilih_tema == "Light":
         st.markdown("""<style>.stApp {background-color: #FFFFFF; color: #000000;} [data-testid="stSidebar"] {background-color: #F0F2F6; color: #000000;}</style>""", unsafe_allow_html=True)
 
+# CSS untuk membersihkan tampilan TAPI tetap memunculkan tombol Sidebar
 hide_st_style = """
             <style>
-            #MainMenu {visibility: hidden;}
-            header {visibility: hidden;}
-            footer {visibility: hidden;}
-            .stDeployButton {display:none;}
+            #MainMenu {visibility: hidden;} /* Sembunyikan titik 3 kanan atas */
+            footer {visibility: hidden;}    /* Sembunyikan tulisan made with streamlit */
+            .stDeployButton {display:none;} /* Sembunyikan tombol deploy */
+            
+            /* Pastikan header (tempat tombol sidebar berada) tetap ada, tapi transparan */
+            header {visibility: visible; background: transparent;} 
             </style>
             """
 st.markdown(hide_st_style, unsafe_allow_html=True)
 
 # --- 3. CONFIG & DATA ---
 ADMIN_CONFIG = {
-    "AREA_INTRANSIT": {"username": "admin_rep", "password": "123", "folder": "Area/Intransit", "label": "Area - Intransit/Proforma"},
-    "AREA_NKL": {"username": "admin_rep", "password": "123", "folder": "Area/NKL", "label": "Area - NKL"},
-    "AREA_RUSAK": {"username": "admin_rep", "password": "123", "folder": "Area/BarangRusak", "label": "Area - Barang Rusak"},
-    "INTERNAL_REP": {"username": "admin_rep", "password": "123", "folder": "InternalIC/Reporting", "label": "Internal IC - Reporting"},
-    "INTERNAL_NKL": {"username": "admin_nkl", "password": "123", "folder": "InternalIC/NKL", "label": "Internal IC - NKL"},
-    "INTERNAL_RUSAK": {"username": "admin_rusak", "password": "123", "folder": "InternalIC/BarangRusak", "label": "Internal IC - Barang Rusak"},
+    "AREA_INTRANSIT": {"username": "admin_area_prof", "password": "123", "folder": "Area/Intransit", "label": "Area - Intransit/Proforma"},
+    "AREA_NKL": {"username": "admin_area_nkl", "password": "123", "folder": "Area/NKL", "label": "Area - NKL"},
+    "AREA_RUSAK": {"username": "admin_area_rusak", "password": "123", "folder": "Area/BarangRusak", "label": "Area - Barang Rusak"},
+    "INTERNAL_REP": {"username": "admin_ic_rep", "password": "123", "folder": "InternalIC/Reporting", "label": "Internal IC - Reporting"},
+    "INTERNAL_NKL": {"username": "admin_ic_nkl", "password": "123", "folder": "InternalIC/NKL", "label": "Internal IC - NKL"},
+    "INTERNAL_RUSAK": {"username": "admin_ic_rusak", "password": "123", "folder": "InternalIC/BarangRusak", "label": "Internal IC - Barang Rusak"},
     "DC_DATA": {"username": "admin_dc", "password": "123", "folder": "DC/General", "label": "DC - Data Utama"}
 }
 
@@ -51,10 +60,10 @@ DATA_CONTACT = {
 
 VIEWER_CREDENTIALS = {
     "INTERNAL_IC": {"user": "ic_bli", "pass": "123456"},
-    "DC": {"user": "ic_dc", "pass": "123456"}
+    "DC": {"user": "IC_DC", "pass": "123456"}
 }
 
-# --- 4. SYSTEM FUNCTIONS (OPTIMIZED) ---
+# --- 4. SYSTEM FUNCTIONS ---
 def init_cloudinary():
     if "cloudinary" not in st.secrets:
         st.error("⚠️ Kunci Cloudinary belum dipasang!")
@@ -66,8 +75,6 @@ def init_cloudinary():
         secure=True
     )
 
-# --- CACHING DAFTAR FILE (INI YANG BIKIN CEPAT) ---
-# TTL = 600 detik (10 menit). Data file disimpan di memori selama 10 menit.
 @st.cache_data(ttl=600, show_spinner=False) 
 def get_all_files_cached():
     try:
@@ -142,7 +149,7 @@ def proses_tampilkan_excel(url, key_unik):
         src = c3.text_input("Cari:", key=f"src_{key_unik}")
         fmt = c4.checkbox("Jaga Format Teks", key=f"fmt_{key_unik}")
         
-        with st.spinner("Loading Data..."): # Spinner biar user tau sedang proses
+        with st.spinner("Loading Data..."): 
             df = load_excel_data(url, sh, hd, fmt)
         
         if df is not None:
@@ -212,15 +219,16 @@ def main():
     if 'admin_logged_in_key' not in st.session_state: st.session_state['admin_logged_in_key'] = None
 
     init_cloudinary()
-    
-    # --- OPTIMASI SPEED: CACHED FILE LIST ---
-    # Data file diambil dari cache (cepat), kecuali baru di-clear
     all_files = get_all_files_cached()
 
-    # --- SIDEBAR ADMIN ---
+    # --- SIDEBAR (PANEL KIRI) ---
     with st.sidebar:
         st.header("🔐 Admin Panel")
+        
+        # LOGIC LOGIN ADMIN
         if st.session_state['admin_logged_in_key'] is None:
+            # TAMPILAN JIKA BELUM LOGIN
+            st.info("Menu Admin & Upload ada di sini.")
             dept = st.selectbox("Departemen:", ["Area", "Internal IC", "DC"])
             pilihan_sub = []
             if dept == "Area":
@@ -231,7 +239,8 @@ def main():
                 pilihan_sub = [("Data DC", "DC_DATA")]
             
             sub_nm, sub_kd = st.selectbox("Menu:", pilihan_sub, format_func=lambda x: x[0])
-            u, p = st.text_input("User"), st.text_input("Pass", type="password")
+            u = st.text_input("User")
+            p = st.text_input("Pass", type="password")
             
             if st.button("Masuk"):
                 cfg = ADMIN_CONFIG[sub_kd]
@@ -240,6 +249,7 @@ def main():
                     st.rerun()
                 else: st.error("Salah")
         else:
+            # TAMPILAN JIKA SUDAH LOGIN
             key = st.session_state['admin_logged_in_key']
             cfg = ADMIN_CONFIG[key]
             st.success(f"Login: {cfg['label']}")
@@ -248,7 +258,6 @@ def main():
             if up and st.button("Upload"):
                 with st.spinner("Upload ke Cloud..."):
                     upload_file(up, cfg['folder'])
-                    # PENTING: Clear cache agar file baru langsung muncul
                     get_all_files_cached.clear()
                     st.success("Sukses!")
                     st.rerun()
@@ -262,7 +271,6 @@ def main():
                 if st.button("❌ Hapus"):
                     with st.spinner("Menghapus..."):
                         hapus_file(d_del[sel_del])
-                        # PENTING: Clear cache setelah hapus
                         get_all_files_cached.clear()
                         st.success("Terhapus")
                         st.rerun()
@@ -272,7 +280,8 @@ def main():
                 st.session_state['admin_logged_in_key'] = None
                 st.rerun()
 
-    atur_tema()
+        # PANGGIL PENGATURAN TEMA DI SIDEBAR
+        atur_tema()
 
     # --- MAIN UI ---
     st.title("📊 Monitoring IC Bali")
