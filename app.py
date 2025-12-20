@@ -14,45 +14,85 @@ st.set_page_config(
     page_icon="🏢"
 )
 
-# --- 2. INISIALISASI SESSION STATE (UNTUK TEMA) ---
+# --- 2. INISIALISASI SESSION STATE ---
 if 'current_theme' not in st.session_state:
-    st.session_state['current_theme'] = "System"
+    st.session_state['current_theme'] = "Dark" # Default Dark biar langsung terlihat fix-nya
 
-# --- 3. FUNGSI CSS & TEMA (TERAPKAN LANGSUNG) ---
+# --- 3. FUNGSI CSS & TEMA (PERBAIKAN KONTRAS) ---
 def terapkan_css():
-    # A. CSS DASAR (SEMBUNYIKAN TOOLBAR, HEADER, FOOTER, SIDEBAR TOGGLE)
+    # A. CSS DASAR (HIDE ELEMENTS)
     base_css = """
         <style>
-            /* Sembunyikan Toolbar Kanan Atas */
             [data-testid="stToolbar"] {visibility: hidden; display: none !important;}
-            /* Sembunyikan Dekorasi Header */
             [data-testid="stDecoration"] {visibility: hidden; display: none !important;}
-            /* Sembunyikan Footer */
             footer {visibility: hidden; display: none;}
-            /* Geser konten ke atas */
             .main .block-container {padding-top: 2rem;}
-            /* Sembunyikan Tombol Sidebar (Panah Kiri) karena kita tidak pakai sidebar lagi */
             [data-testid="stSidebarCollapsedControl"] {display: none;}
         </style>
     """
     st.markdown(base_css, unsafe_allow_html=True)
 
-    # B. CSS WARNA (DARK/LIGHT)
+    # B. CSS WARNA (FIXED DARK MODE)
     tema = st.session_state['current_theme']
     
     if tema == "Dark":
         st.markdown("""
         <style>
-            .stApp {background-color: #0E1117; color: #FFFFFF;}
-            h1, h2, h3, h4, h5, h6, p, span, div, label, .stMarkdown {color: #FFFFFF !important;}
-            .stRadio > label {color: #FFFFFF !important;}
-            .stTextInput > label {color: #FFFFFF !important;}
-            .stNumberInput > label {color: #FFFFFF !important;}
-            .stSelectbox > label {color: #FFFFFF !important;}
-            input.stTextInput {background-color: #FFFFFF !important; color: #000000 !important;}
+            /* 1. Latar Belakang Aplikasi Gelap */
+            .stApp {
+                background-color: #0E1117;
+                color: #FFFFFF;
+            }
+
+            /* 2. Teks Umum (Judul, Label, Paragraf) -> PUTIH */
+            h1, h2, h3, h4, h5, h6, p, span, div, label, .stMarkdown {
+                color: #FFFFFF !important;
+            }
+
+            /* 3. PERBAIKAN TOTAL INPUT BOX (Selectbox, Text Input) */
+            
+            /* Paksa Latar Belakang Kotak Input jadi PUTIH */
+            div[data-baseweb="select"] > div,
+            div[data-baseweb="input"] > div {
+                background-color: #FFFFFF !important;
+                border: 1px solid #ccc !important;
+            }
+
+            /* Paksa TEKS di dalam Kotak Input jadi HITAM (PENTING!) */
+            /* Ini untuk teks yang sudah terpilih */
+            div[data-baseweb="select"] span {
+                color: #000000 !important;
+                -webkit-text-fill-color: #000000 !important;
+            }
+            /* Ini untuk teks yang sedang diketik */
+            div[data-baseweb="input"] input {
+                color: #000000 !important;
+                -webkit-text-fill-color: #000000 !important;
+                caret-color: #000000 !important; /* Warna kursor ketik */
+            }
+
+            /* 4. Perbaikan Dropdown Menu (List Pilihan saat diklik) */
+            ul[data-baseweb="menu"] {
+                background-color: #FFFFFF !important;
+            }
+            /* Teks pilihan di dalam dropdown */
+            li[role="option"] span {
+                color: #000000 !important; 
+            }
+
+            /* 5. Tabel Excel tetap normal */
             .stDataFrame { filter: invert(0); }
+            
+            /* 6. Radio Button tetap putih */
+            .stRadio label { color: #FFFFFF !important; }
+
+            /* 7. Icon mata password */
+            button[aria-label="Show password"] {
+                color: #000000 !important;
+            }
         </style>
         """, unsafe_allow_html=True)
+
     elif tema == "Light":
         st.markdown("""
         <style>
@@ -61,18 +101,18 @@ def terapkan_css():
         </style>
         """, unsafe_allow_html=True)
 
-# PANGGIL FUNGSI CSS DI AWAL AGAR TERAPLIKASI SEBELUM KONTEN MUNCUL
+# PANGGIL FUNGSI CSS
 terapkan_css()
 
 # --- 4. CONFIG & DATA ---
 ADMIN_CONFIG = {
-    "AREA_INTRANSIT": {"username": "admin_rep", "password": "123", "folder": "Area/Intransit", "label": "Area - Intransit/Proforma"},
-    "AREA_NKL": {"username": "admin_nkl", "password": "123", "folder": "Area/NKL", "label": "Area - NKL"},
-    "AREA_RUSAK": {"username": "admin_rusak", "password": "123", "folder": "Area/BarangRusak", "label": "Area - Barang Rusak"},
-    "INTERNAL_REP": {"username": "admin_rep", "password": "123", "folder": "InternalIC/Reporting", "label": "Internal IC - Reporting"},
-    "INTERNAL_NKL": {"username": "admin_nkl", "password": "123", "folder": "InternalIC/NKL", "label": "Internal IC - NKL"},
-    "INTERNAL_RUSAK": {"username": "admin_rusak", "password": "123", "folder": "InternalIC/BarangRusak", "label": "Internal IC - Barang Rusak"},
-    "DC_DATA": {"username": "admin_dc", "password": "123", "folder": "DC/General", "label": "DC - Data Utama"}
+    "AREA_INTRANSIT": {"username": "admin_rep", "password": "123456", "folder": "Area/Intransit", "label": "Area - Intransit/Proforma"},
+    "AREA_NKL": {"username": "admin_nkl", "password": "123456", "folder": "Area/NKL", "label": "Area - NKL"},
+    "AREA_RUSAK": {"username": "admin_rusak", "password": "123456", "folder": "Area/BarangRusak", "label": "Area - Barang Rusak"},
+    "INTERNAL_REP": {"username": "admin_rep", "password": "123456", "folder": "InternalIC/Reporting", "label": "Internal IC - Reporting"},
+    "INTERNAL_NKL": {"username": "admin_nkl", "password": "123456", "folder": "InternalIC/NKL", "label": "Internal IC - NKL"},
+    "INTERNAL_RUSAK": {"username": "admin_rusak", "password": "123456", "folder": "InternalIC/BarangRusak", "label": "Internal IC - Barang Rusak"},
+    "DC_DATA": {"username": "admin_dc", "password": "123456", "folder": "DC/General", "label": "DC - Data Utama"}
 }
 
 DATA_CONTACT = {
@@ -244,25 +284,21 @@ def main():
     init_cloudinary()
     all_files = get_all_files_cached()
 
-    # JUDUL HALAMAN
     st.title("📊 Monitoring IC Bali")
-
+    
     # --- MENU UTAMA ---
-    # Tambahkan '🎨 Tampilan Web'
     menu_options = ["Area", "Internal IC", "DC", "Lapor Error", "🔐 Admin Panel", "🎨 Tampilan Web"]
     menu = st.radio("Navigasi:", menu_options, horizontal=True)
     st.divider()
 
-    # --- LOGIKA MENU ---
-
-    # 1. AREA
+    # --- 1. AREA ---
     if menu == "Area":
         t1, t2, t3 = st.tabs(["Intransit", "NKL", "Barang Rusak"])
         with t1: tampilkan_viewer("Intransit", ADMIN_CONFIG["AREA_INTRANSIT"]["folder"], all_files, "AREA_INTRANSIT")
         with t2: tampilkan_viewer("NKL", ADMIN_CONFIG["AREA_NKL"]["folder"], all_files, "AREA_NKL")
         with t3: tampilkan_viewer_area_rusak(ADMIN_CONFIG["AREA_RUSAK"]["folder"], all_files, "AREA_RUSAK")
 
-    # 2. INTERNAL IC
+    # --- 2. INTERNAL IC ---
     elif menu == "Internal IC":
         if not st.session_state['auth_internal']:
             c1, c2, c3 = st.columns([1,2,1])
@@ -285,7 +321,7 @@ def main():
             with t2: tampilkan_viewer("NKL", ADMIN_CONFIG["INTERNAL_NKL"]["folder"], all_files, None)
             with t3: tampilkan_viewer("Rusak", ADMIN_CONFIG["INTERNAL_RUSAK"]["folder"], all_files, None)
 
-    # 3. DC
+    # --- 3. DC ---
     elif menu == "DC":
         if not st.session_state['auth_dc']:
             c1, c2, c3 = st.columns([1,2,1])
@@ -305,7 +341,7 @@ def main():
                 st.rerun()
             tampilkan_viewer("Data DC", ADMIN_CONFIG["DC_DATA"]["folder"], all_files, None)
 
-    # 4. LAPOR ERROR
+    # --- 4. LAPOR ERROR ---
     elif menu == "Lapor Error":
         st.subheader("🚨 Lapor Error")
         up = st.file_uploader("Upload Screenshot", type=['png', 'jpg', 'jpeg'])
@@ -315,7 +351,7 @@ def main():
                 st.success("terima kasih, error anda akan diselesaikan sesuai mood admin :)")
                 st.balloons()
     
-    # 5. ADMIN PANEL (FULL WIDTH)
+    # --- 5. ADMIN PANEL ---
     elif menu == "🔐 Admin Panel":
         st.subheader("⚙️ Kelola Data (Admin Only)")
         
@@ -352,6 +388,8 @@ def main():
             st.info(f"📁 Folder Target Cloud: {cfg['folder']}")
             
             c_up, c_del = st.columns(2)
+            
+            # FITUR UPLOAD
             with c_up:
                 st.markdown("#### 📤 Upload File Baru")
                 with st.container(border=True):
@@ -363,6 +401,7 @@ def main():
                             st.success("Berhasil diupload!")
                             st.rerun()
 
+            # FITUR HAPUS
             with c_del:
                 st.markdown("#### 🗑️ Hapus File Lama")
                 with st.container(border=True):
@@ -387,7 +426,7 @@ def main():
                 st.session_state['admin_logged_in_key'] = None
                 st.rerun()
 
-    # 6. TAMPILAN WEB (FITUR BARU DI MENU UTAMA)
+    # --- 6. TAMPILAN WEB ---
     elif menu == "🎨 Tampilan Web":
         st.subheader("🎨 Pengaturan Tampilan")
         st.write("Pilih mode tampilan yang nyaman untuk mata Anda.")
@@ -395,21 +434,20 @@ def main():
         col_theme, col_blank = st.columns([1, 2])
         with col_theme:
             with st.container(border=True):
-                # Radio button untuk memilih tema
-                # Index diambil dari nilai session state yang tersimpan
                 options = ["System", "Light", "Dark"]
-                current_index = options.index(st.session_state['current_theme'])
+                # Default Dark jika session belum ada/valid
+                if st.session_state['current_theme'] not in options:
+                    st.session_state['current_theme'] = "Dark"
                 
+                current_index = options.index(st.session_state['current_theme'])
                 selected_theme = st.radio("Pilih Mode:", options, index=current_index)
                 
-                # Jika user mengubah pilihan, simpan ke session state dan rerun
                 if selected_theme != st.session_state['current_theme']:
                     st.session_state['current_theme'] = selected_theme
                     st.rerun()
         
         st.info(f"Mode saat ini: **{st.session_state['current_theme']}**")
 
-    # Footer
     st.markdown("""<div style='position: fixed; bottom: 0; right: 0; padding: 10px; opacity: 0.5; font-size: 12px; color: grey;'>Monitoring IC Bali System</div>""", unsafe_allow_html=True)
 
 if __name__ == "__main__":
