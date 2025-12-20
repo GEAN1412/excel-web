@@ -15,7 +15,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 2. CSS & TEMA (PERBAIKAN FONT & HIDE MENU) ---
+# --- 2. CSS & TEMA (PERBAIKAN TOMBOL SIDEBAR) ---
 def atur_tema():
     st.sidebar.markdown("---")
     st.sidebar.caption("🎨 Pengaturan Tampilan")
@@ -23,65 +23,70 @@ def atur_tema():
         "Mode:", ["System", "Light", "Dark"], label_visibility="collapsed"
     )
 
-    # CSS GLOBAL UNTUK MENGHILANGKAN TOOLBAR ATAS (GITHUB, ETC)
-    # Ini akan menyembunyikan tombol kanan atas tapi tetap membiarkan tombol sidebar (kiri) berfungsi
+    # === [PERBAIKAN CSS UTAMA DI SINI] ===
+    # Kita tidak hide 'header', tapi hide 'stToolbar' saja.
     hide_toolbar_css = """
         <style>
-            /* Sembunyikan Toolbar Kanan Atas (GitHub, Star, Menu) */
+            /* 1. Sembunyikan Toolbar Kanan Atas (GitHub, Star, Titik Tiga) */
             [data-testid="stToolbar"] {
                 visibility: hidden;
-                display: none;
+                display: none !important;
             }
-            /* Sembunyikan Header Dekorasi (Garis warna warni) */
+
+            /* 2. Sembunyikan Garis Warna-warni di paling atas */
             [data-testid="stDecoration"] {
                 visibility: hidden;
-                display: none;
+                display: none !important;
             }
-            /* Sembunyikan Footer Bawaan */
+
+            /* 3. Header dibuat transparan, JANGAN di-hidden total */
+            /* Agar tombol sidebar tetap bisa diklik */
+            [data-testid="stHeader"] {
+                background-color: rgba(0,0,0,0); /* Transparan */
+            }
+
+            /* 4. Sembunyikan Footer Bawaan Streamlit */
             footer {
                 visibility: hidden;
                 display: none;
             }
-            /* Sembunyikan Tombol Deploy */
-            .stDeployButton {
-                display: none;
-            }
-            /* Geser konten ke atas sedikit karena header hilang */
+            
+            /* 5. Geser konten ke atas sedikit agar rapi */
             .main .block-container {
-                padding-top: 2rem;
+                padding-top: 3rem;
             }
         </style>
     """
     st.markdown(hide_toolbar_css, unsafe_allow_html=True)
 
-    # CSS KHUSUS TEMA
+    # CSS KHUSUS TEMA (DARK/LIGHT)
     if pilih_tema == "Dark":
         st.markdown("""
         <style>
-            /* Background Gelap Pekat */
-            .stApp {
-                background-color: #0E1117;
-                color: #FFFFFF;
-            }
-            /* Sidebar Gelap */
-            [data-testid="stSidebar"] {
-                background-color: #262730;
-            }
-            /* PERBAIKAN FONT SAMAR: Paksa semua teks jadi Putih Terang */
+            /* Latar Gelap */
+            .stApp { background-color: #0E1117; color: #FFFFFF; }
+            [data-testid="stSidebar"] { background-color: #262730; }
+            
+            /* Font Putih Jelas */
             h1, h2, h3, h4, h5, h6, p, span, div, label, .stMarkdown {
                 color: #FFFFFF !important;
             }
-            /* Input Box: Latar Putih, Teks Hitam (Biar kontras) */
+            
+            /* Input Box Putih, Teks Hitam */
             input.stTextInput {
                 background-color: #FFFFFF !important;
                 color: #000000 !important;
             }
-            /* Label Input (Username/Pass) biar terbaca jelas */
             .stTextInput > label, .stSelectbox > label {
                 color: #FFFFFF !important;
                 font-weight: bold;
             }
-            /* Tabel Excel: Normal */
+            
+            /* Tombol Sidebar (Panah) jadi Putih agar terlihat */
+            [data-testid="stSidebarCollapsedControl"] {
+                color: #FFFFFF !important;
+            }
+            
             .stDataFrame { filter: invert(0); }
         </style>
         """, unsafe_allow_html=True)
@@ -92,6 +97,11 @@ def atur_tema():
             .stApp { background-color: #FFFFFF; color: #000000; }
             [data-testid="stSidebar"] { background-color: #F0F2F6; color: #000000; }
             h1, h2, h3, p, label { color: #000000 !important; }
+            
+            /* Tombol Sidebar (Panah) jadi Hitam */
+            [data-testid="stSidebarCollapsedControl"] {
+                color: #000000 !important;
+            }
         </style>
         """, unsafe_allow_html=True)
 
@@ -280,7 +290,6 @@ def main():
         st.header("🔐 Admin Panel")
         
         if st.session_state['admin_logged_in_key'] is None:
-            st.info("Menu Admin & Upload")
             dept = st.selectbox("Departemen:", ["Area", "Internal IC", "DC"])
             pilihan_sub = []
             if dept == "Area":
@@ -331,7 +340,7 @@ def main():
                 st.session_state['admin_logged_in_key'] = None
                 st.rerun()
 
-        # SETUP TEMA DI SINI (Paling Bawah Sidebar)
+        # SETUP TEMA DI SINI
         atur_tema()
 
     # --- MAIN UI ---
@@ -395,12 +404,7 @@ def main():
                 st.success("terima kasih, error anda akan diselesaikan sesuai mood admin :)")
                 st.balloons()
     
-    # FOOTER PENGGANTI (POJOK BAWAH)
-    st.markdown("""
-        <div style='position: fixed; bottom: 0; right: 0; padding: 10px; opacity: 0.5; font-size: 12px; color: grey;'>
-            Monitoring IC Bali System
-        </div>
-    """, unsafe_allow_html=True)
+    st.markdown("""<div style='position: fixed; bottom: 0; right: 0; padding: 10px; opacity: 0.5; font-size: 12px; color: grey;'>Monitoring IC Bali System</div>""", unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
