@@ -19,7 +19,6 @@ def atur_tema():
     if 'current_theme' not in st.session_state:
         st.session_state['current_theme'] = "Dark" 
 
-    # CSS Global
     st.markdown("""
         <style>
             [data-testid="stToolbar"] {visibility: hidden; display: none !important;}
@@ -61,13 +60,13 @@ terapkan_css()
 
 # --- 3. CONFIG & DATA ---
 ADMIN_CONFIG = {
-    "AREA_INTRANSIT": {"username": "admin_rep", "password": "123456", "folder": "Area/Intransit", "label": "Area - Intransit/Proforma"},
-    "AREA_NKL": {"username": "admin_nkl", "password": "123456", "folder": "Area/NKL", "label": "Area - NKL"},
-    "AREA_RUSAK": {"username": "admin_rusak", "password": "123456", "folder": "Area/BarangRusak", "label": "Area - Barang Rusak"},
-    "INTERNAL_REP": {"username": "admin_rep", "password": "123456", "folder": "InternalIC/Reporting", "label": "Internal IC - Reporting"},
-    "INTERNAL_NKL": {"username": "admin_nkl", "password": "123456", "folder": "InternalIC/NKL", "label": "Internal IC - NKL"},
-    "INTERNAL_RUSAK": {"username": "admin_rusak", "password": "123456", "folder": "InternalIC/BarangRusak", "label": "Internal IC - Barang Rusak"},
-    "DC_DATA": {"username": "admin_dc", "password": "123456", "folder": "DC/General", "label": "DC - Data Utama"}
+    "AREA_INTRANSIT": {"username": "admin_area_prof", "password": "123", "folder": "Area/Intransit", "label": "Area - Intransit/Proforma"},
+    "AREA_NKL": {"username": "admin_area_nkl", "password": "123", "folder": "Area/NKL", "label": "Area - NKL"},
+    "AREA_RUSAK": {"username": "admin_area_rusak", "password": "123", "folder": "Area/BarangRusak", "label": "Area - Barang Rusak"},
+    "INTERNAL_REP": {"username": "admin_ic_rep", "password": "123", "folder": "InternalIC/Reporting", "label": "Internal IC - Reporting"},
+    "INTERNAL_NKL": {"username": "admin_ic_nkl", "password": "123", "folder": "InternalIC/NKL", "label": "Internal IC - NKL"},
+    "INTERNAL_RUSAK": {"username": "admin_ic_rusak", "password": "123", "folder": "InternalIC/BarangRusak", "label": "Internal IC - Barang Rusak"},
+    "DC_DATA": {"username": "admin_dc", "password": "123", "folder": "DC/General", "label": "DC - Data Utama"}
 }
 
 DATA_CONTACT = {
@@ -78,7 +77,7 @@ DATA_CONTACT = {
 
 VIEWER_CREDENTIALS = {
     "INTERNAL_IC": {"user": "ic_bli", "pass": "123456"},
-    "DC": {"user": "ic_dc", "pass": "123456"}
+    "DC": {"user": "IC_DC", "pass": "123456"}
 }
 
 # --- 4. SYSTEM FUNCTIONS ---
@@ -138,24 +137,13 @@ def get_sheet_names(url):
     except:
         return []
 
-# --- 5. FORMATTING FUNCTIONS (SEDERHANA: TITIK RIBUAN) ---
-
+# --- 5. FORMATTING (HANYA UNTUK TAMPILAN) ---
 def format_ribuan_indo(nilai):
-    """
-    Mengubah angka menjadi format Indonesia (Ribuan pakai Titik).
-    12000 -> 12.000
-    12000.5 -> 12.000,50
-    """
     try:
-        # Cek apakah float punya desimal
         if float(nilai) % 1 != 0:
-            # Punya desimal, tampilkan 2 angka di belakang koma (US Format: 1,234.56)
             val = "{:,.2f}".format(float(nilai)) 
         else:
-            # Bulat, tanpa desimal (US Format: 1,234)
             val = "{:,.0f}".format(float(nilai))
-            
-        # TUKAR FORMAT US KE INDO (Koma jadi Titik, Titik jadi Koma)
         translation = val.maketrans({",": ".", ".": ","})
         return val.translate(translation)
     except:
@@ -184,36 +172,55 @@ def proses_tampilkan_excel(url, key_unik):
         fmt = c4.checkbox("Jaga Semua Teks (No HP/NIK)", key=f"fmt_{key_unik}")
         
         with st.spinner("Loading Data..."): 
-            df = load_excel_data(url, sh, hd, fmt)
+            # 1. LOAD DATA RAW (DATA MENTAH)
+            # Data ini yang akan dipakai untuk DOWNLOAD (Masih format angka asli)
+            df_raw = load_excel_data(url, sh, hd, fmt)
         
-        if df is not None:
-            # 1. Filter Search
-            if src: df = df[df.astype(str).apply(lambda x: x.str.contains(src, case=False, na=False)).any(axis=1)]
-            
-            # 2. Logic Formatting (SIMPLIFIED)
+        if df_raw is not None:
+            # Filter Search (Diterapkan ke df_raw dulu)
+            if src:
+                mask = df_raw.astype(str).apply(lambda x: x.str.contains(src, case=False, na=False)).any(axis=1)
+                df_raw = df_raw[mask]
+
+            # 2. BUAT DATA TAMPILAN (DATA CANTIK)
+            # Kita copy agar df_raw tidak ikut berubah jadi string
+            df_display = df_raw.copy()
+
+            # --- LOGIC FORMATTING (HANYA KE DF_DISPLAY) ---
             if not fmt:
-                # Ambil semua kolom angka
-                num_cols = df.select_dtypes(include=['float64', 'int64']).columns.tolist()
-                
-                # Daftar kata kunci untuk KODE (Yang TIDAK BOLEH dikasih titik)
+                num_cols = df_display.select_dtypes(include=['float64', 'int64']).columns.tolist()
                 kw_raw_code = ['prdcd', 'plu', 'barcode', 'kode', 'id', 'nik', 'no', 'nomor']
 
                 for col in num_cols:
                     col_lower = col.lower()
                     
-                    # LOGIKA 1: Jika kolom ini adalah KODE -> Jadikan Teks Biasa (tanpa titik)
+                    # KODE/PLU: Jadikan String tanpa .0
                     if any(k in col_lower for k in kw_raw_code):
-                        # Hilangkan .0 jika ada (misal 200.0 -> 200)
-                        df[col] = df[col].astype(str).str.replace(r'\.0$', '', regex=True)
+                        df_display[col] = df_display[col].astype(str).str.replace(r'\.0$', '', regex=True)
                     
-                    # LOGIKA 2: Jika bukan kode (berarti Uang/Qty/Persen) -> Format Ribuan (Pakai Titik)
-                    else:
-                        # Pastikan masih angka sebelum diformat
-                        if pd.api.types.is_numeric_dtype(df[col]):
-                            df[col] = df[col].apply(format_ribuan_indo)
+                    # ANGKA/UANG: Format Ribuan
+                    elif pd.api.types.is_numeric_dtype(df_display[col]):
+                        df_display[col] = df_display[col].apply(format_ribuan_indo)
 
-            st.dataframe(df, use_container_width=True, height=500)
-            st.caption(f"Total: {len(df)} Baris")
+            # TAMPILKAN DI LAYAR (YANG CANTIK)
+            st.dataframe(df_display, use_container_width=True, height=500)
+            
+            # TOMBOL DOWNLOAD (YANG MENTAH/ASLI)
+            # Kita convert df_raw ke CSV
+            csv = df_raw.to_csv(index=False).encode('utf-8')
+            
+            col_info, col_dl = st.columns([3, 1])
+            with col_info:
+                st.caption(f"Total: {len(df_raw)} Baris")
+            with col_dl:
+                st.download_button(
+                    label="📥 Download CSV (Format Asli)",
+                    data=csv,
+                    file_name=f"Data_Export_{sh}.csv",
+                    mime='text/csv',
+                    key=f"dl_{key_unik}"
+                )
+
         else: st.error("Gagal memuat data.")
 
 def tampilkan_viewer(judul_tab, folder_target, semua_files, kode_kontak=None):
