@@ -7,39 +7,93 @@ import hashlib
 import requests
 import io
 
-# --- 1. KONFIGURASI HALAMAN (MEMAKSA SIDEBAR TERBUKA) ---
+# --- 1. KONFIGURASI HALAMAN ---
 st.set_page_config(
     page_title="Web Monitoring IC Bali", 
     layout="wide", 
     page_icon="🏢",
-    initial_sidebar_state="expanded" # <--- INI KUNCINYA AGAR MENU KIRI MUNCUL
+    initial_sidebar_state="expanded"
 )
 
-# --- 2. CSS & TEMA ---
+# --- 2. CSS & TEMA (PERBAIKAN FONT & HIDE MENU) ---
 def atur_tema():
-    # Letakkan pengaturan tema di Sidebar bagian paling bawah
     st.sidebar.markdown("---")
     st.sidebar.caption("🎨 Pengaturan Tampilan")
     pilih_tema = st.sidebar.radio(
         "Mode:", ["System", "Light", "Dark"], label_visibility="collapsed"
     )
-    if pilih_tema == "Dark":
-        st.markdown("""<style>.stApp {background-color: #0E1117; color: #FAFAFA;} [data-testid="stSidebar"] {background-color: #262730; color: #FAFAFA;} .stDataFrame { filter: invert(0); }</style>""", unsafe_allow_html=True)
-    elif pilih_tema == "Light":
-        st.markdown("""<style>.stApp {background-color: #FFFFFF; color: #000000;} [data-testid="stSidebar"] {background-color: #F0F2F6; color: #000000;}</style>""", unsafe_allow_html=True)
 
-# CSS untuk membersihkan tampilan TAPI tetap memunculkan tombol Sidebar
-hide_st_style = """
-            <style>
-            #MainMenu {visibility: hidden;} /* Sembunyikan titik 3 kanan atas */
-            footer {visibility: hidden;}    /* Sembunyikan tulisan made with streamlit */
-            .stDeployButton {display:none;} /* Sembunyikan tombol deploy */
-            
-            /* Pastikan header (tempat tombol sidebar berada) tetap ada, tapi transparan */
-            header {visibility: visible; background: transparent;} 
-            </style>
-            """
-st.markdown(hide_st_style, unsafe_allow_html=True)
+    # CSS GLOBAL UNTUK MENGHILANGKAN TOOLBAR ATAS (GITHUB, ETC)
+    # Ini akan menyembunyikan tombol kanan atas tapi tetap membiarkan tombol sidebar (kiri) berfungsi
+    hide_toolbar_css = """
+        <style>
+            /* Sembunyikan Toolbar Kanan Atas (GitHub, Star, Menu) */
+            [data-testid="stToolbar"] {
+                visibility: hidden;
+                display: none;
+            }
+            /* Sembunyikan Header Dekorasi (Garis warna warni) */
+            [data-testid="stDecoration"] {
+                visibility: hidden;
+                display: none;
+            }
+            /* Sembunyikan Footer Bawaan */
+            footer {
+                visibility: hidden;
+                display: none;
+            }
+            /* Sembunyikan Tombol Deploy */
+            .stDeployButton {
+                display: none;
+            }
+            /* Geser konten ke atas sedikit karena header hilang */
+            .main .block-container {
+                padding-top: 2rem;
+            }
+        </style>
+    """
+    st.markdown(hide_toolbar_css, unsafe_allow_html=True)
+
+    # CSS KHUSUS TEMA
+    if pilih_tema == "Dark":
+        st.markdown("""
+        <style>
+            /* Background Gelap Pekat */
+            .stApp {
+                background-color: #0E1117;
+                color: #FFFFFF;
+            }
+            /* Sidebar Gelap */
+            [data-testid="stSidebar"] {
+                background-color: #262730;
+            }
+            /* PERBAIKAN FONT SAMAR: Paksa semua teks jadi Putih Terang */
+            h1, h2, h3, h4, h5, h6, p, span, div, label, .stMarkdown {
+                color: #FFFFFF !important;
+            }
+            /* Input Box: Latar Putih, Teks Hitam (Biar kontras) */
+            input.stTextInput {
+                background-color: #FFFFFF !important;
+                color: #000000 !important;
+            }
+            /* Label Input (Username/Pass) biar terbaca jelas */
+            .stTextInput > label, .stSelectbox > label {
+                color: #FFFFFF !important;
+                font-weight: bold;
+            }
+            /* Tabel Excel: Normal */
+            .stDataFrame { filter: invert(0); }
+        </style>
+        """, unsafe_allow_html=True)
+        
+    elif pilih_tema == "Light":
+        st.markdown("""
+        <style>
+            .stApp { background-color: #FFFFFF; color: #000000; }
+            [data-testid="stSidebar"] { background-color: #F0F2F6; color: #000000; }
+            h1, h2, h3, p, label { color: #000000 !important; }
+        </style>
+        """, unsafe_allow_html=True)
 
 # --- 3. CONFIG & DATA ---
 ADMIN_CONFIG = {
@@ -221,14 +275,12 @@ def main():
     init_cloudinary()
     all_files = get_all_files_cached()
 
-    # --- SIDEBAR (PANEL KIRI) ---
+    # --- SIDEBAR ADMIN ---
     with st.sidebar:
         st.header("🔐 Admin Panel")
         
-        # LOGIC LOGIN ADMIN
         if st.session_state['admin_logged_in_key'] is None:
-            # TAMPILAN JIKA BELUM LOGIN
-            st.info("Menu Admin & Upload ada di sini.")
+            st.info("Menu Admin & Upload")
             dept = st.selectbox("Departemen:", ["Area", "Internal IC", "DC"])
             pilihan_sub = []
             if dept == "Area":
@@ -249,7 +301,6 @@ def main():
                     st.rerun()
                 else: st.error("Salah")
         else:
-            # TAMPILAN JIKA SUDAH LOGIN
             key = st.session_state['admin_logged_in_key']
             cfg = ADMIN_CONFIG[key]
             st.success(f"Login: {cfg['label']}")
@@ -280,7 +331,7 @@ def main():
                 st.session_state['admin_logged_in_key'] = None
                 st.rerun()
 
-        # PANGGIL PENGATURAN TEMA DI SIDEBAR
+        # SETUP TEMA DI SINI (Paling Bawah Sidebar)
         atur_tema()
 
     # --- MAIN UI ---
@@ -343,6 +394,13 @@ def main():
                 upload_image_error(up)
                 st.success("terima kasih, error anda akan diselesaikan sesuai mood admin :)")
                 st.balloons()
+    
+    # FOOTER PENGGANTI (POJOK BAWAH)
+    st.markdown("""
+        <div style='position: fixed; bottom: 0; right: 0; padding: 10px; opacity: 0.5; font-size: 12px; color: grey;'>
+            Monitoring IC Bali System
+        </div>
+    """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
