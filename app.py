@@ -11,99 +11,39 @@ import io
 st.set_page_config(
     page_title="Web Monitoring IC Bali", 
     layout="wide", 
-    page_icon="🏢",
-    initial_sidebar_state="expanded"
+    page_icon="🏢"
 )
 
-# --- 2. CSS & TEMA (PERBAIKAN TOMBOL SIDEBAR) ---
+# --- 2. CSS & TEMA ---
 def atur_tema():
-    st.sidebar.markdown("---")
-    st.sidebar.caption("🎨 Pengaturan Tampilan")
-    pilih_tema = st.sidebar.radio(
-        "Mode:", ["System", "Light", "Dark"], label_visibility="collapsed"
-    )
-
-    # === [PERBAIKAN CSS UTAMA DI SINI] ===
-    # Kita tidak hide 'header', tapi hide 'stToolbar' saja.
-    hide_toolbar_css = """
+    # Tema kita taruh di Sidebar, tapi tidak krusial jika sidebar tersembunyi
+    # Defaultnya akan mengikuti sistem
+    st.sidebar.caption("🎨 Tampilan")
+    pilih_tema = st.sidebar.radio("Mode:", ["System", "Light", "Dark"])
+    
+    # CSS UNTUK MENYEMBUNYIKAN HEADER & TOOLBAR SECARA TOTAL
+    # Karena menu admin sudah pindah ke tengah, kita bisa aman menyembunyikan sidebar toggle
+    hide_css = """
         <style>
-            /* 1. Sembunyikan Toolbar Kanan Atas (GitHub, Star, Titik Tiga) */
-            [data-testid="stToolbar"] {
-                visibility: hidden;
-                display: none !important;
-            }
-
-            /* 2. Sembunyikan Garis Warna-warni di paling atas */
-            [data-testid="stDecoration"] {
-                visibility: hidden;
-                display: none !important;
-            }
-
-            /* 3. Header dibuat transparan, JANGAN di-hidden total */
-            /* Agar tombol sidebar tetap bisa diklik */
-            [data-testid="stHeader"] {
-                background-color: rgba(0,0,0,0); /* Transparan */
-            }
-
-            /* 4. Sembunyikan Footer Bawaan Streamlit */
-            footer {
-                visibility: hidden;
-                display: none;
-            }
+            /* Sembunyikan Toolbar Kanan Atas */
+            [data-testid="stToolbar"] {visibility: hidden; display: none !important;}
+            /* Sembunyikan Dekorasi Header */
+            [data-testid="stDecoration"] {visibility: hidden; display: none !important;}
+            /* Sembunyikan Footer */
+            footer {visibility: hidden; display: none;}
+            /* Geser konten ke atas */
+            .main .block-container {padding-top: 2rem;}
             
-            /* 5. Geser konten ke atas sedikit agar rapi */
-            .main .block-container {
-                padding-top: 3rem;
-            }
+            /* (Opsional) Jika Anda benar-benar ingin Sidebar hilang total, uncomment baris bawah ini: */
+            /* [data-testid="stSidebar"] {display: none;} */
         </style>
     """
-    st.markdown(hide_toolbar_css, unsafe_allow_html=True)
+    st.markdown(hide_css, unsafe_allow_html=True)
 
-    # CSS KHUSUS TEMA (DARK/LIGHT)
     if pilih_tema == "Dark":
-        st.markdown("""
-        <style>
-            /* Latar Gelap */
-            .stApp { background-color: #0E1117; color: #FFFFFF; }
-            [data-testid="stSidebar"] { background-color: #262730; }
-            
-            /* Font Putih Jelas */
-            h1, h2, h3, h4, h5, h6, p, span, div, label, .stMarkdown {
-                color: #FFFFFF !important;
-            }
-            
-            /* Input Box Putih, Teks Hitam */
-            input.stTextInput {
-                background-color: #FFFFFF !important;
-                color: #000000 !important;
-            }
-            .stTextInput > label, .stSelectbox > label {
-                color: #FFFFFF !important;
-                font-weight: bold;
-            }
-            
-            /* Tombol Sidebar (Panah) jadi Putih agar terlihat */
-            [data-testid="stSidebarCollapsedControl"] {
-                color: #FFFFFF !important;
-            }
-            
-            .stDataFrame { filter: invert(0); }
-        </style>
-        """, unsafe_allow_html=True)
-        
+        st.markdown("""<style>.stApp {background-color: #0E1117; color: #FFFFFF;} h1,h2,p,label{color:#fff !important;} .stDataFrame { filter: invert(0); }</style>""", unsafe_allow_html=True)
     elif pilih_tema == "Light":
-        st.markdown("""
-        <style>
-            .stApp { background-color: #FFFFFF; color: #000000; }
-            [data-testid="stSidebar"] { background-color: #F0F2F6; color: #000000; }
-            h1, h2, h3, p, label { color: #000000 !important; }
-            
-            /* Tombol Sidebar (Panah) jadi Hitam */
-            [data-testid="stSidebarCollapsedControl"] {
-                color: #000000 !important;
-            }
-        </style>
-        """, unsafe_allow_html=True)
+        st.markdown("""<style>.stApp {background-color: #FFFFFF; color: #000000;} h1,h2,p,label{color:#000 !important;}</style>""", unsafe_allow_html=True)
 
 # --- 3. CONFIG & DATA ---
 ADMIN_CONFIG = {
@@ -284,76 +224,24 @@ def main():
 
     init_cloudinary()
     all_files = get_all_files_cached()
+    
+    atur_tema()
 
-    # --- SIDEBAR ADMIN ---
-    with st.sidebar:
-        st.header("🔐 Admin Panel")
-        
-        if st.session_state['admin_logged_in_key'] is None:
-            dept = st.selectbox("Departemen:", ["Area", "Internal IC", "DC"])
-            pilihan_sub = []
-            if dept == "Area":
-                pilihan_sub = [("Intransit", "AREA_INTRANSIT"), ("NKL", "AREA_NKL"), ("Barang Rusak", "AREA_RUSAK")]
-            elif dept == "Internal IC":
-                pilihan_sub = [("Reporting", "INTERNAL_REP"), ("NKL", "INTERNAL_NKL"), ("Barang Rusak", "INTERNAL_RUSAK")]
-            elif dept == "DC":
-                pilihan_sub = [("Data DC", "DC_DATA")]
-            
-            sub_nm, sub_kd = st.selectbox("Menu:", pilihan_sub, format_func=lambda x: x[0])
-            u = st.text_input("User")
-            p = st.text_input("Pass", type="password")
-            
-            if st.button("Masuk"):
-                cfg = ADMIN_CONFIG[sub_kd]
-                if u == cfg['username'] and p == cfg['password']:
-                    st.session_state['admin_logged_in_key'] = sub_kd
-                    st.rerun()
-                else: st.error("Salah")
-        else:
-            key = st.session_state['admin_logged_in_key']
-            cfg = ADMIN_CONFIG[key]
-            st.success(f"Login: {cfg['label']}")
-            
-            up = st.file_uploader("Upload Excel", type=['xlsx'])
-            if up and st.button("Upload"):
-                with st.spinner("Upload ke Cloud..."):
-                    upload_file(up, cfg['folder'])
-                    get_all_files_cached.clear()
-                    st.success("Sukses!")
-                    st.rerun()
-            
-            st.divider()
-            prefix = cfg['folder'] + "/"
-            my_files = [f for f in all_files if f['public_id'].startswith(prefix)]
-            if my_files:
-                d_del = {f['public_id'].replace(prefix, ""): f['public_id'] for f in my_files}
-                sel_del = st.selectbox("Hapus File:", list(d_del.keys()))
-                if st.button("❌ Hapus"):
-                    with st.spinner("Menghapus..."):
-                        hapus_file(d_del[sel_del])
-                        get_all_files_cached.clear()
-                        st.success("Terhapus")
-                        st.rerun()
-            
-            st.divider()
-            if st.button("Logout"):
-                st.session_state['admin_logged_in_key'] = None
-                st.rerun()
-
-        # SETUP TEMA DI SINI
-        atur_tema()
-
-    # --- MAIN UI ---
     st.title("📊 Monitoring IC Bali")
-    menu = st.radio("Menu:", ["Area", "Internal IC", "DC", "Lapor Error"], horizontal=True)
+    
+    # --- MENU UTAMA ---
+    # Tambahkan '🔐 Admin Panel' sebagai menu utama
+    menu = st.radio("Menu:", ["Area", "Internal IC", "DC", "Lapor Error", "🔐 Admin Panel"], horizontal=True)
     st.divider()
 
+    # --- 1. AREA ---
     if menu == "Area":
         t1, t2, t3 = st.tabs(["Intransit", "NKL", "Barang Rusak"])
         with t1: tampilkan_viewer("Intransit", ADMIN_CONFIG["AREA_INTRANSIT"]["folder"], all_files, "AREA_INTRANSIT")
         with t2: tampilkan_viewer("NKL", ADMIN_CONFIG["AREA_NKL"]["folder"], all_files, "AREA_NKL")
         with t3: tampilkan_viewer_area_rusak(ADMIN_CONFIG["AREA_RUSAK"]["folder"], all_files, "AREA_RUSAK")
 
+    # --- 2. INTERNAL IC ---
     elif menu == "Internal IC":
         if not st.session_state['auth_internal']:
             c1, c2, c3 = st.columns([1,2,1])
@@ -376,6 +264,7 @@ def main():
             with t2: tampilkan_viewer("NKL", ADMIN_CONFIG["INTERNAL_NKL"]["folder"], all_files, None)
             with t3: tampilkan_viewer("Rusak", ADMIN_CONFIG["INTERNAL_RUSAK"]["folder"], all_files, None)
 
+    # --- 3. DC ---
     elif menu == "DC":
         if not st.session_state['auth_dc']:
             c1, c2, c3 = st.columns([1,2,1])
@@ -395,6 +284,7 @@ def main():
                 st.rerun()
             tampilkan_viewer("Data DC", ADMIN_CONFIG["DC_DATA"]["folder"], all_files, None)
 
+    # --- 4. LAPOR ERROR ---
     elif menu == "Lapor Error":
         st.subheader("🚨 Lapor Error")
         up = st.file_uploader("Upload Screenshot", type=['png', 'jpg', 'jpeg'])
@@ -404,6 +294,84 @@ def main():
                 st.success("terima kasih, error anda akan diselesaikan sesuai mood admin :)")
                 st.balloons()
     
+    # --- 5. ADMIN PANEL (PINDAHAN DARI SIDEBAR) ---
+    elif menu == "🔐 Admin Panel":
+        st.subheader("⚙️ Kelola Data (Admin Only)")
+        
+        # JIKA BELUM LOGIN ADMIN
+        if st.session_state['admin_logged_in_key'] is None:
+            c1, c2, c3 = st.columns([1, 2, 1])
+            with c2:
+                with st.container(border=True):
+                    st.write("Silakan Login sesuai Divisi")
+                    dept = st.selectbox("Departemen:", ["Area", "Internal IC", "DC"])
+                    pilihan_sub = []
+                    if dept == "Area":
+                        pilihan_sub = [("Intransit", "AREA_INTRANSIT"), ("NKL", "AREA_NKL"), ("Barang Rusak", "AREA_RUSAK")]
+                    elif dept == "Internal IC":
+                        pilihan_sub = [("Reporting", "INTERNAL_REP"), ("NKL", "INTERNAL_NKL"), ("Barang Rusak", "INTERNAL_RUSAK")]
+                    elif dept == "DC":
+                        pilihan_sub = [("Data DC", "DC_DATA")]
+                    
+                    sub_nm, sub_kd = st.selectbox("Target Menu:", pilihan_sub, format_func=lambda x: x[0])
+                    u = st.text_input("Username Admin")
+                    p = st.text_input("Password", type="password")
+                    
+                    if st.button("Masuk Panel Admin", use_container_width=True):
+                        cfg = ADMIN_CONFIG[sub_kd]
+                        if u == cfg['username'] and p == cfg['password']:
+                            st.session_state['admin_logged_in_key'] = sub_kd
+                            st.rerun()
+                        else: st.error("Username atau Password Salah")
+
+        # JIKA SUDAH LOGIN ADMIN
+        else:
+            key = st.session_state['admin_logged_in_key']
+            cfg = ADMIN_CONFIG[key]
+            
+            st.success(f"✅ Login Berhasil: {cfg['label']}")
+            st.info(f"📁 Folder Target Cloud: {cfg['folder']}")
+            
+            c_up, c_del = st.columns(2)
+            
+            # FITUR UPLOAD
+            with c_up:
+                st.markdown("#### 📤 Upload File Baru")
+                with st.container(border=True):
+                    up = st.file_uploader("Pilih File Excel (.xlsx)", type=['xlsx'])
+                    if up and st.button("Mulai Upload", use_container_width=True):
+                        with st.spinner("Sedang mengupload ke server..."):
+                            upload_file(up, cfg['folder'])
+                            get_all_files_cached.clear()
+                            st.success("Berhasil diupload!")
+                            st.rerun()
+
+            # FITUR HAPUS
+            with c_del:
+                st.markdown("#### 🗑️ Hapus File Lama")
+                with st.container(border=True):
+                    prefix = cfg['folder'] + "/"
+                    my_files = [f for f in all_files if f['public_id'].startswith(prefix)]
+                    
+                    if my_files:
+                        d_del = {f['public_id'].replace(prefix, ""): f['public_id'] for f in my_files}
+                        sel_del = st.selectbox("Pilih file yang akan dihapus:", list(d_del.keys()))
+                        
+                        if st.button("❌ Hapus File Terpilih", use_container_width=True):
+                            with st.spinner("Menghapus data..."):
+                                hapus_file(d_del[sel_del])
+                                get_all_files_cached.clear()
+                                st.success("File berhasil dihapus.")
+                                st.rerun()
+                    else:
+                        st.write("Belum ada file di folder ini.")
+            
+            st.divider()
+            if st.button("🚪 Logout Admin"):
+                st.session_state['admin_logged_in_key'] = None
+                st.rerun()
+
+    # Footer
     st.markdown("""<div style='position: fixed; bottom: 0; right: 0; padding: 10px; opacity: 0.5; font-size: 12px; color: grey;'>Monitoring IC Bali System</div>""", unsafe_allow_html=True)
 
 if __name__ == "__main__":
