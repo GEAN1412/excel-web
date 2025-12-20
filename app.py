@@ -61,13 +61,13 @@ terapkan_css()
 
 # --- 3. CONFIG & DATA ---
 ADMIN_CONFIG = {
-    "AREA_INTRANSIT": {"username": "admin_area_prof", "password": "123", "folder": "Area/Intransit", "label": "Area - Intransit/Proforma"},
-    "AREA_NKL": {"username": "admin_area_nkl", "password": "123", "folder": "Area/NKL", "label": "Area - NKL"},
-    "AREA_RUSAK": {"username": "admin_area_rusak", "password": "123", "folder": "Area/BarangRusak", "label": "Area - Barang Rusak"},
-    "INTERNAL_REP": {"username": "admin_ic_rep", "password": "123", "folder": "InternalIC/Reporting", "label": "Internal IC - Reporting"},
-    "INTERNAL_NKL": {"username": "admin_ic_nkl", "password": "123", "folder": "InternalIC/NKL", "label": "Internal IC - NKL"},
-    "INTERNAL_RUSAK": {"username": "admin_ic_rusak", "password": "123", "folder": "InternalIC/BarangRusak", "label": "Internal IC - Barang Rusak"},
-    "DC_DATA": {"username": "admin_dc", "password": "123", "folder": "DC/General", "label": "DC - Data Utama"}
+    "AREA_INTRANSIT": {"username": "admin_rep", "password": "123456", "folder": "Area/Intransit", "label": "Area - Intransit/Proforma"},
+    "AREA_NKL": {"username": "admin_nkl", "password": "123456", "folder": "Area/NKL", "label": "Area - NKL"},
+    "AREA_RUSAK": {"username": "admin_rusak", "password": "123456", "folder": "Area/BarangRusak", "label": "Area - Barang Rusak"},
+    "INTERNAL_REP": {"username": "admin_rep", "password": "123456", "folder": "InternalIC/Reporting", "label": "Internal IC - Reporting"},
+    "INTERNAL_NKL": {"username": "admin_nkl", "password": "123456", "folder": "InternalIC/NKL", "label": "Internal IC - NKL"},
+    "INTERNAL_RUSAK": {"username": "admin_rusak", "password": "123456", "folder": "InternalIC/BarangRusak", "label": "Internal IC - Barang Rusak"},
+    "DC_DATA": {"username": "admin_dc", "password": "123456", "folder": "DC/General", "label": "DC - Data Utama"}
 }
 
 DATA_CONTACT = {
@@ -78,7 +78,7 @@ DATA_CONTACT = {
 
 VIEWER_CREDENTIALS = {
     "INTERNAL_IC": {"user": "ic_bli", "pass": "123456"},
-    "DC": {"user": "IC_DC", "pass": "123456"}
+    "DC": {"user": "ic_dc", "pass": "123456"}
 }
 
 # --- 4. SYSTEM FUNCTIONS ---
@@ -138,27 +138,24 @@ def get_sheet_names(url):
     except:
         return []
 
-# --- 5. FORMATTING FUNCTIONS ---
+# --- 5. FORMATTING FUNCTIONS (SEDERHANA: TITIK RIBUAN) ---
 
-def format_rupiah(nilai):
-    """Format: Rp 1.000.000,00"""
+def format_ribuan_indo(nilai):
+    """
+    Mengubah angka menjadi format Indonesia (Ribuan pakai Titik).
+    12000 -> 12.000
+    12000.5 -> 12.000,50
+    """
     try:
-        if float(nilai) % 1 != 0: 
-            val = "{:,.0f}".format(float(nilai)) 
-        else:
-            val = "{:,.0f}".format(float(nilai))
-        val = val.replace(",", ".")
-        return f"Rp {val}"
-    except:
-        return nilai
-
-def format_angka_biasa(nilai):
-    """Format: 1.000 (Untuk Qty / %)"""
-    try:
+        # Cek apakah float punya desimal
         if float(nilai) % 1 != 0:
+            # Punya desimal, tampilkan 2 angka di belakang koma (US Format: 1,234.56)
             val = "{:,.2f}".format(float(nilai)) 
         else:
+            # Bulat, tanpa desimal (US Format: 1,234)
             val = "{:,.0f}".format(float(nilai))
+            
+        # TUKAR FORMAT US KE INDO (Koma jadi Titik, Titik jadi Koma)
         translation = val.maketrans({",": ".", ".": ","})
         return val.translate(translation)
     except:
@@ -193,45 +190,27 @@ def proses_tampilkan_excel(url, key_unik):
             # 1. Filter Search
             if src: df = df[df.astype(str).apply(lambda x: x.str.contains(src, case=False, na=False)).any(axis=1)]
             
-            # 2. Logic Formatting
+            # 2. Logic Formatting (SIMPLIFIED)
             if not fmt:
+                # Ambil semua kolom angka
                 num_cols = df.select_dtypes(include=['float64', 'int64']).columns.tolist()
                 
-                # A. KATA KUNCI RUPIAH (Jadikan Rp ...)
-                kw_uang = ['rp', 'amount', 'total', 'cost', 'jual', 'beli', 'net', 'prod', 'price', 'margin']
-                # Pengecualian uang
-                kw_skip_uang = ['qty', '%', 'ach', 'no', 'nomor', 'prdcd', 'kode', 'id', 'plu', 'barcode']
-
-                def_rp = []
-                for col in num_cols:
-                    col_lower = col.lower()
-                    if any(k in col_lower for k in kw_uang) and not any(x in col_lower for x in kw_skip_uang):
-                        def_rp.append(col)
-                
-                with st.expander("💰 Pengaturan Format Angka", expanded=False):
-                    cols_fmt = st.multiselect("Kolom Format Rupiah (Rp):", num_cols, default=def_rp, key=f"mny_{key_unik}")
-                
-                # Terapkan Format Rupiah
-                if cols_fmt:
-                    for c in cols_fmt: df[c] = df[c].apply(format_rupiah)
-                
-                # B. FORMAT SISA KOLOM (ANGKA BIASA vs KODE)
-                sisa_cols = [x for x in num_cols if x not in cols_fmt]
-                
-                # Kata kunci untuk KODE (Prdcd, PLU) -> JANGAN DI FORMAT 1.000, biarkan 1000
+                # Daftar kata kunci untuk KODE (Yang TIDAK BOLEH dikasih titik)
                 kw_raw_code = ['prdcd', 'plu', 'barcode', 'kode', 'id', 'nik', 'no', 'nomor']
 
-                for c in sisa_cols:
-                    col_lower = c.lower()
+                for col in num_cols:
+                    col_lower = col.lower()
                     
-                    # Cek apakah ini KODE/PLU/PRDCD?
+                    # LOGIKA 1: Jika kolom ini adalah KODE -> Jadikan Teks Biasa (tanpa titik)
                     if any(k in col_lower for k in kw_raw_code):
-                        # JADIKAN TEXT MENTAH (Hilangkan .0 jika ada)
-                        df[c] = df[c].astype(str).str.replace(r'\.0$', '', regex=True)
+                        # Hilangkan .0 jika ada (misal 200.0 -> 200)
+                        df[col] = df[col].astype(str).str.replace(r'\.0$', '', regex=True)
                     
-                    # Jika bukan Kode (berarti Qty, %, Ach) -> Format Cantik (1.000)
-                    elif pd.api.types.is_numeric_dtype(df[c]):
-                        df[c] = df[c].apply(format_angka_biasa)
+                    # LOGIKA 2: Jika bukan kode (berarti Uang/Qty/Persen) -> Format Ribuan (Pakai Titik)
+                    else:
+                        # Pastikan masih angka sebelum diformat
+                        if pd.api.types.is_numeric_dtype(df[col]):
+                            df[col] = df[col].apply(format_ribuan_indo)
 
             st.dataframe(df, use_container_width=True, height=500)
             st.caption(f"Total: {len(df)} Baris")
