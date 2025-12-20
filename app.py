@@ -10,7 +10,47 @@ import io
 # --- 1. KONFIGURASI HALAMAN ---
 st.set_page_config(page_title="Web Monitoring IC Bali", layout="wide", page_icon="🏢")
 
-# --- 2. CSS & STYLE (MENYEMBUNYIKAN MENU) ---
+# --- 2. CSS & TEMA (FITUR BARU: LIGHT/DARK MODE) ---
+def atur_tema():
+    # Menu di Sidebar
+    st.sidebar.markdown("---")
+    st.sidebar.caption("🎨 Pengaturan Tampilan")
+    pilih_tema = st.sidebar.radio(
+        "Mode Tampilan:",
+        ["System Default", "Light Mode", "Dark Mode"],
+        label_visibility="collapsed"
+    )
+
+    if pilih_tema == "Dark Mode":
+        st.markdown("""
+        <style>
+            .stApp {
+                background-color: #0E1117;
+                color: #FAFAFA;
+            }
+            [data-testid="stSidebar"] {
+                background-color: #262730;
+                color: #FAFAFA;
+            }
+            .stDataFrame { filter: invert(0); }
+        </style>
+        """, unsafe_allow_html=True)
+    elif pilih_tema == "Light Mode":
+        st.markdown("""
+        <style>
+            .stApp {
+                background-color: #FFFFFF;
+                color: #000000;
+            }
+            [data-testid="stSidebar"] {
+                background-color: #F0F2F6;
+                color: #000000;
+            }
+        </style>
+        """, unsafe_allow_html=True)
+    # Jika System Default, biarkan Streamlit mengatur sendiri
+
+# Sembunyikan Menu Bawaan Streamlit
 hide_st_style = """
             <style>
             #MainMenu {visibility: hidden;}
@@ -23,22 +63,35 @@ st.markdown(hide_st_style, unsafe_allow_html=True)
 
 # --- 3. KONFIGURASI ADMIN ---
 ADMIN_CONFIG = {
-    "AREA_INTRANSIT": {"username": "admin_area_prof", "password": "123", "folder": "Area/Intransit", "label": "Area - Intransit/Proforma"},
-    "AREA_NKL": {"username": "admin_area_nkl", "password": "123", "folder": "Area/NKL", "label": "Area - NKL"},
-    "AREA_RUSAK": {"username": "admin_area_rusak", "password": "123", "folder": "Area/BarangRusak", "label": "Area - Barang Rusak"},
+    "AREA_INTRANSIT": {"username": "admin_rep", "password": "123", "folder": "Area/Intransit", "label": "Area - Intransit/Proforma"},
+    "AREA_NKL": {"username": "admin_nkl", "password": "123", "folder": "Area/NKL", "label": "Area - NKL"},
+    "AREA_RUSAK": {"username": "admin_rusak", "password": "123", "folder": "Area/BarangRusak", "label": "Area - Barang Rusak"},
     
-    "INTERNAL_REP": {"username": "admin_ic_rep", "password": "123", "folder": "InternalIC/Reporting", "label": "Internal IC - Reporting"},
-    "INTERNAL_NKL": {"username": "admin_ic_nkl", "password": "123", "folder": "InternalIC/NKL", "label": "Internal IC - NKL"},
-    "INTERNAL_RUSAK": {"username": "admin_ic_rusak", "password": "123", "folder": "InternalIC/BarangRusak", "label": "Internal IC - Barang Rusak"},
+    "INTERNAL_REP": {"username": "admin_rep", "password": "123", "folder": "InternalIC/Reporting", "label": "Internal IC - Reporting"},
+    "INTERNAL_NKL": {"username": "admin_nkl", "password": "123", "folder": "InternalIC/NKL", "label": "Internal IC - NKL"},
+    "INTERNAL_RUSAK": {"username": "admin_rusak", "password": "123", "folder": "InternalIC/BarangRusak", "label": "Internal IC - Barang Rusak"},
     
     "DC_DATA": {"username": "admin_dc", "password": "123", "folder": "DC/General", "label": "DC - Data Utama"}
 }
 
-# --- 4. DATA KONTAK ---
+# --- 4. DATA KONTAK (UPDATE SESUAI PERMINTAAN) ---
+# Hanya untuk Area
 DATA_CONTACT = {
-    "AREA": [("Putu IC", "087850110155"), ("Pribadi IC", "087761390987")],
-    "INTERNAL": [("Muklis IC", "081934327289"), ("Ari IC", "081353446516"), ("Yani IC", "087760346299"), ("Tulasi IC", "081805347302")],
-    "DC": [("Admin DC", "-")]
+    "AREA_NKL": [
+        ("Putu IC", "087850110155"), 
+        ("Priyadi IC", "087761390987")
+    ],
+    "AREA_INTRANSIT": [
+        ("Muklis IC", "081934327289"), 
+        ("Proforma - Ari IC", "081353446516"),
+        ("NRB - Yani IC", "087760346299"), 
+        ("BPB/TAT - Tulasi IC", "081805347302")
+    ],
+    "AREA_RUSAK": [
+        ("Putu IC", "087850110155"), 
+        ("Dwi IC", "083114444424"),
+        ("Gean IC", "087725860048")
+    ]
 }
 
 VIEWER_CREDENTIALS = {
@@ -83,7 +136,6 @@ def load_excel_data(url, sheet_name, header_row, force_text=False):
             df = pd.read_excel(file_content, sheet_name=sheet_name, header=header_row - 1, dtype=str).fillna("")
         else:
             df = pd.read_excel(file_content, sheet_name=sheet_name, header=header_row - 1)
-            # Jangan bulatkan di sini dulu, biarkan raw number agar bisa diformat rupiah
         return df
     except:
         return None
@@ -97,19 +149,22 @@ def get_sheet_names(url):
         return []
 
 def format_rupiah(nilai):
-    """Mengubah angka menjadi format Rp Indonesia (Titik sebagai ribuan)"""
     try:
-        # Format ribuan koma dulu (10,000)
         hasil = "{:,.0f}".format(float(nilai))
-        # Ganti koma jadi titik, dan tempel Rp
         return f"Rp {hasil.replace(',', '.')}"
     except:
         return nilai
 
-def tampilkan_kontak(tipe):
-    kontak = DATA_CONTACT.get(tipe, [])
+def tampilkan_kontak(divisi_key):
+    # Jika key tidak ada atau None, jangan tampilkan apa-apa
+    if not divisi_key:
+        return
+
+    kontak = DATA_CONTACT.get(divisi_key, [])
     if kontak:
-        with st.expander(f"📞 Contact Person ({tipe})"):
+        # Gunakan nama yang lebih user friendly untuk judul expander
+        judul = divisi_key.replace("AREA_", "Divisi ").replace("_", " ")
+        with st.expander(f"📞 Contact Person (CP) - {judul}"):
             cols = st.columns(4)
             for i, (nama, telp) in enumerate(kontak):
                 wa = "62" + telp[1:] if telp.startswith("0") else telp
@@ -124,49 +179,29 @@ def proses_tampilkan_excel(url, key_unik):
         hd = c2.number_input("Header:", 1, key=f"hd_{key_unik}")
         c3, c4 = st.columns([2, 1])
         src = c3.text_input("Cari:", key=f"src_{key_unik}")
-        fmt = c4.checkbox("Jaga Format Teks (No HP/Kode)", key=f"fmt_{key_unik}")
+        fmt = c4.checkbox("Jaga Format Teks", key=f"fmt_{key_unik}")
         
         with st.spinner("Loading..."):
             df = load_excel_data(url, sh, hd, fmt)
         
         if df is not None:
-            # 1. Filter Pencarian
             if src:
                 df = df[df.astype(str).apply(lambda x: x.str.contains(src, case=False, na=False)).any(axis=1)]
 
-            # 2. FITUR AUTO FORMAT RUPIAH
-            # Jika user TIDAK mencentang "Jaga Format Teks", kita aktifkan format Rupiah
             if not fmt:
-                # Cari kolom yang berisi angka
                 numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns.tolist()
-                
-                # Tebak kolom uang berdasarkan nama (Case Insensitive)
-                # Kata kunci: Rp, Sales, Margin, Harga, Amount, Total, Cost, Jual, Beli
                 keywords_uang = ['rp', 'sales', 'margin', 'harga', 'amount', 'total', 'cost', 'jual', 'beli', 'net', 'prod']
-                
-                # Filter kolom yang namanya mengandung kata kunci di atas
                 default_rupiah = [col for col in numeric_cols if any(k in col.lower() for k in keywords_uang)]
                 
-                # Tampilkan Multiselect agar user bisa koreksi
-                st.write("") # Spasi
-                with st.expander("💰 Pengaturan Format Mata Uang (Rupiah)", expanded=False):
-                    cols_to_format = st.multiselect(
-                        "Pilih kolom yang ingin dijadikan format Rp:",
-                        options=numeric_cols,
-                        default=default_rupiah,
-                        key=f"money_{key_unik}"
-                    )
+                with st.expander("💰 Format Rupiah", expanded=False):
+                    cols_to_format = st.multiselect("Pilih kolom Rp:", options=numeric_cols, default=default_rupiah, key=f"money_{key_unik}")
                 
-                # Terapkan Format Rupiah (Rp 10.000)
-                # Kita ubah datanya menjadi String agar visualnya pas
                 if cols_to_format:
                     for col in cols_to_format:
                         df[col] = df[col].apply(format_rupiah)
                     
-                # Sisa kolom numerik yang BUKAN rupiah, kita bulatkan 2 digit desimal biasa
                 sisa_cols = [c for c in numeric_cols if c not in cols_to_format]
                 for col in sisa_cols:
-                    # Cek lagi apakah kolom itu masih numeric (karena format_rupiah mengubah jadi object)
                     if pd.api.types.is_numeric_dtype(df[col]):
                         df[col] = df[col].round(2)
 
@@ -175,8 +210,10 @@ def proses_tampilkan_excel(url, key_unik):
         else:
             st.error("Error load data.")
 
-def tampilkan_viewer(judul_tab, folder_target, semua_files, tipe_kontak):
-    tampilkan_kontak(tipe_kontak)
+def tampilkan_viewer(judul_tab, folder_target, semua_files, kode_kontak=None):
+    # Tampilkan kontak hanya jika kode_kontak diberikan
+    tampilkan_kontak(kode_kontak)
+    
     prefix = folder_target + "/"
     files_filtered = [f for f in semua_files if f['public_id'].startswith(prefix) and f['public_id'].endswith('.xlsx')]
     
@@ -191,10 +228,10 @@ def tampilkan_viewer(judul_tab, folder_target, semua_files, tipe_kontak):
     if pilih:
         proses_tampilkan_excel(dict_files[pilih], unik)
 
-def tampilkan_viewer_area_rusak(folder_target, semua_files, tipe_kontak):
-    tampilkan_kontak(tipe_kontak)
-    st.markdown("### ⚠️ Area - Barang Rusak")
+def tampilkan_viewer_area_rusak(folder_target, semua_files, kode_kontak=None):
+    tampilkan_kontak(kode_kontak)
     
+    st.markdown("### ⚠️ Area - Barang Rusak")
     kategori = st.radio("Filter:", ["Semua Data", "Say Bread", "Mr Bread", "Fried Chicken", "Onigiri"], horizontal=True)
     st.divider()
 
@@ -280,6 +317,9 @@ def main():
                 st.session_state['admin_logged_in_key'] = None
                 st.rerun()
 
+    # SETUP TEMA (DI SIDEBAR BAWAH)
+    atur_tema()
+
     # CONTENT UTAMA
     st.title("📊 Monitoring IC Bali")
     menu = st.radio("Menu:", ["Area", "Internal IC", "DC", "Lapor Error"], horizontal=True)
@@ -287,9 +327,10 @@ def main():
 
     if menu == "Area":
         t1, t2, t3 = st.tabs(["Intransit", "NKL", "Barang Rusak"])
-        with t1: tampilkan_viewer("Intransit", ADMIN_CONFIG["AREA_INTRANSIT"]["folder"], all_files, "AREA")
-        with t2: tampilkan_viewer("NKL", ADMIN_CONFIG["AREA_NKL"]["folder"], all_files, "AREA")
-        with t3: tampilkan_viewer_area_rusak(ADMIN_CONFIG["AREA_RUSAK"]["folder"], all_files, "AREA")
+        # Perhatikan kode kontak hanya dikirim di sini (AREA_...)
+        with t1: tampilkan_viewer("Intransit", ADMIN_CONFIG["AREA_INTRANSIT"]["folder"], all_files, "AREA_INTRANSIT")
+        with t2: tampilkan_viewer("NKL", ADMIN_CONFIG["AREA_NKL"]["folder"], all_files, "AREA_NKL")
+        with t3: tampilkan_viewer_area_rusak(ADMIN_CONFIG["AREA_RUSAK"]["folder"], all_files, "AREA_RUSAK")
 
     elif menu == "Internal IC":
         if not st.session_state['auth_internal']:
@@ -309,9 +350,10 @@ def main():
                 st.session_state['auth_internal'] = False
                 st.rerun()
             t1, t2, t3 = st.tabs(["Reporting", "NKL", "Rusak"])
-            with t1: tampilkan_viewer("Reporting", ADMIN_CONFIG["INTERNAL_REP"]["folder"], all_files, "INTERNAL")
-            with t2: tampilkan_viewer("NKL", ADMIN_CONFIG["INTERNAL_NKL"]["folder"], all_files, "INTERNAL")
-            with t3: tampilkan_viewer("Rusak", ADMIN_CONFIG["INTERNAL_RUSAK"]["folder"], all_files, "INTERNAL")
+            # Kode Kontak dikosongkan (None) agar CP tidak muncul
+            with t1: tampilkan_viewer("Reporting", ADMIN_CONFIG["INTERNAL_REP"]["folder"], all_files, None)
+            with t2: tampilkan_viewer("NKL", ADMIN_CONFIG["INTERNAL_NKL"]["folder"], all_files, None)
+            with t3: tampilkan_viewer("Rusak", ADMIN_CONFIG["INTERNAL_RUSAK"]["folder"], all_files, None)
 
     elif menu == "DC":
         if not st.session_state['auth_dc']:
@@ -330,7 +372,8 @@ def main():
             if st.button("Lock DC"): 
                 st.session_state['auth_dc'] = False
                 st.rerun()
-            tampilkan_viewer("Data DC", ADMIN_CONFIG["DC_DATA"]["folder"], all_files, "DC")
+            # Kode Kontak dikosongkan (None)
+            tampilkan_viewer("Data DC", ADMIN_CONFIG["DC_DATA"]["folder"], all_files, None)
 
     elif menu == "Lapor Error":
         st.subheader("🚨 Lapor Error")
