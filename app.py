@@ -14,14 +14,13 @@ st.set_page_config(
     page_icon="🏢"
 )
 
-# --- 2. INISIALISASI SESSION STATE ---
-if 'current_theme' not in st.session_state:
-    st.session_state['current_theme'] = "Dark" # Default Dark biar langsung terlihat fix-nya
+# --- 2. CSS & TEMA ---
+def atur_tema():
+    if 'current_theme' not in st.session_state:
+        st.session_state['current_theme'] = "Dark" 
 
-# --- 3. FUNGSI CSS & TEMA (PERBAIKAN KONTRAS) ---
-def terapkan_css():
-    # A. CSS DASAR (HIDE ELEMENTS)
-    base_css = """
+    # CSS Global
+    st.markdown("""
         <style>
             [data-testid="stToolbar"] {visibility: hidden; display: none !important;}
             [data-testid="stDecoration"] {visibility: hidden; display: none !important;}
@@ -29,70 +28,26 @@ def terapkan_css():
             .main .block-container {padding-top: 2rem;}
             [data-testid="stSidebarCollapsedControl"] {display: none;}
         </style>
-    """
-    st.markdown(base_css, unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
-    # B. CSS WARNA (FIXED DARK MODE)
     tema = st.session_state['current_theme']
     
     if tema == "Dark":
         st.markdown("""
         <style>
-            /* 1. Latar Belakang Aplikasi Gelap */
-            .stApp {
-                background-color: #0E1117;
-                color: #FFFFFF;
+            .stApp { background-color: #0E1117; color: #FFFFFF; }
+            h1, h2, h3, h4, h5, h6, p, span, div, label, .stMarkdown { color: #FFFFFF !important; }
+            div[data-baseweb="select"] > div, div[data-baseweb="input"] > div {
+                background-color: #FFFFFF !important; border: 1px solid #ccc !important;
             }
-
-            /* 2. Teks Umum (Judul, Label, Paragraf) -> PUTIH */
-            h1, h2, h3, h4, h5, h6, p, span, div, label, .stMarkdown {
-                color: #FFFFFF !important;
-            }
-
-            /* 3. PERBAIKAN TOTAL INPUT BOX (Selectbox, Text Input) */
-            
-            /* Paksa Latar Belakang Kotak Input jadi PUTIH */
-            div[data-baseweb="select"] > div,
-            div[data-baseweb="input"] > div {
-                background-color: #FFFFFF !important;
-                border: 1px solid #ccc !important;
-            }
-
-            /* Paksa TEKS di dalam Kotak Input jadi HITAM (PENTING!) */
-            /* Ini untuk teks yang sudah terpilih */
-            div[data-baseweb="select"] span {
-                color: #000000 !important;
-                -webkit-text-fill-color: #000000 !important;
-            }
-            /* Ini untuk teks yang sedang diketik */
-            div[data-baseweb="input"] input {
-                color: #000000 !important;
-                -webkit-text-fill-color: #000000 !important;
-                caret-color: #000000 !important; /* Warna kursor ketik */
-            }
-
-            /* 4. Perbaikan Dropdown Menu (List Pilihan saat diklik) */
-            ul[data-baseweb="menu"] {
-                background-color: #FFFFFF !important;
-            }
-            /* Teks pilihan di dalam dropdown */
-            li[role="option"] span {
-                color: #000000 !important; 
-            }
-
-            /* 5. Tabel Excel tetap normal */
-            .stDataFrame { filter: invert(0); }
-            
-            /* 6. Radio Button tetap putih */
+            div[data-baseweb="select"] span { color: #000000 !important; -webkit-text-fill-color: #000000 !important; }
+            div[data-baseweb="input"] input { color: #000000 !important; -webkit-text-fill-color: #000000 !important; caret-color: #000 !important; }
+            ul[data-baseweb="menu"] { background-color: #FFFFFF !important; }
+            li[role="option"] span { color: #000000 !important; }
             .stRadio label { color: #FFFFFF !important; }
-
-            /* 7. Icon mata password */
-            button[aria-label="Show password"] {
-                color: #000000 !important;
-            }
+            .stDataFrame { filter: invert(0); }
         </style>
         """, unsafe_allow_html=True)
-
     elif tema == "Light":
         st.markdown("""
         <style>
@@ -101,18 +56,18 @@ def terapkan_css():
         </style>
         """, unsafe_allow_html=True)
 
-# PANGGIL FUNGSI CSS
+terapkan_css = atur_tema
 terapkan_css()
 
-# --- 4. CONFIG & DATA ---
+# --- 3. CONFIG & DATA ---
 ADMIN_CONFIG = {
-    "AREA_INTRANSIT": {"username": "admin_rep", "password": "123456", "folder": "Area/Intransit", "label": "Area - Intransit/Proforma"},
-    "AREA_NKL": {"username": "admin_nkl", "password": "123456", "folder": "Area/NKL", "label": "Area - NKL"},
-    "AREA_RUSAK": {"username": "admin_rusak", "password": "123456", "folder": "Area/BarangRusak", "label": "Area - Barang Rusak"},
-    "INTERNAL_REP": {"username": "admin_rep", "password": "123456", "folder": "InternalIC/Reporting", "label": "Internal IC - Reporting"},
-    "INTERNAL_NKL": {"username": "admin_nkl", "password": "123456", "folder": "InternalIC/NKL", "label": "Internal IC - NKL"},
-    "INTERNAL_RUSAK": {"username": "admin_rusak", "password": "123456", "folder": "InternalIC/BarangRusak", "label": "Internal IC - Barang Rusak"},
-    "DC_DATA": {"username": "admin_dc", "password": "123456", "folder": "DC/General", "label": "DC - Data Utama"}
+    "AREA_INTRANSIT": {"username": "admin_area_prof", "password": "123", "folder": "Area/Intransit", "label": "Area - Intransit/Proforma"},
+    "AREA_NKL": {"username": "admin_area_nkl", "password": "123", "folder": "Area/NKL", "label": "Area - NKL"},
+    "AREA_RUSAK": {"username": "admin_area_rusak", "password": "123", "folder": "Area/BarangRusak", "label": "Area - Barang Rusak"},
+    "INTERNAL_REP": {"username": "admin_ic_rep", "password": "123", "folder": "InternalIC/Reporting", "label": "Internal IC - Reporting"},
+    "INTERNAL_NKL": {"username": "admin_ic_nkl", "password": "123", "folder": "InternalIC/NKL", "label": "Internal IC - NKL"},
+    "INTERNAL_RUSAK": {"username": "admin_ic_rusak", "password": "123", "folder": "InternalIC/BarangRusak", "label": "Internal IC - Barang Rusak"},
+    "DC_DATA": {"username": "admin_dc", "password": "123", "folder": "DC/General", "label": "DC - Data Utama"}
 }
 
 DATA_CONTACT = {
@@ -123,10 +78,10 @@ DATA_CONTACT = {
 
 VIEWER_CREDENTIALS = {
     "INTERNAL_IC": {"user": "ic_bli", "pass": "123456"},
-    "DC": {"user": "ic_dc", "pass": "123456"}
+    "DC": {"user": "IC_DC", "pass": "123456"}
 }
 
-# --- 5. SYSTEM FUNCTIONS ---
+# --- 4. SYSTEM FUNCTIONS ---
 def init_cloudinary():
     if "cloudinary" not in st.secrets:
         st.error("⚠️ Kunci Cloudinary belum dipasang!")
@@ -183,10 +138,29 @@ def get_sheet_names(url):
     except:
         return []
 
+# --- 5. FORMATTING FUNCTIONS ---
+
 def format_rupiah(nilai):
+    """Format: Rp 1.000.000,00"""
     try:
-        hasil = "{:,.0f}".format(float(nilai))
-        return f"Rp {hasil.replace(',', '.')}"
+        if float(nilai) % 1 != 0: 
+            val = "{:,.0f}".format(float(nilai)) 
+        else:
+            val = "{:,.0f}".format(float(nilai))
+        val = val.replace(",", ".")
+        return f"Rp {val}"
+    except:
+        return nilai
+
+def format_angka_biasa(nilai):
+    """Format: 1.000 (Untuk Qty / %)"""
+    try:
+        if float(nilai) % 1 != 0:
+            val = "{:,.2f}".format(float(nilai)) 
+        else:
+            val = "{:,.0f}".format(float(nilai))
+        translation = val.maketrans({",": ".", ".": ","})
+        return val.translate(translation)
     except:
         return nilai
 
@@ -210,26 +184,54 @@ def proses_tampilkan_excel(url, key_unik):
         hd = c2.number_input("Header:", 1, key=f"hd_{key_unik}")
         c3, c4 = st.columns([2, 1])
         src = c3.text_input("Cari:", key=f"src_{key_unik}")
-        fmt = c4.checkbox("Jaga Format Teks", key=f"fmt_{key_unik}")
+        fmt = c4.checkbox("Jaga Semua Teks (No HP/NIK)", key=f"fmt_{key_unik}")
         
         with st.spinner("Loading Data..."): 
             df = load_excel_data(url, sh, hd, fmt)
         
         if df is not None:
+            # 1. Filter Search
             if src: df = df[df.astype(str).apply(lambda x: x.str.contains(src, case=False, na=False)).any(axis=1)]
             
+            # 2. Logic Formatting
             if not fmt:
                 num_cols = df.select_dtypes(include=['float64', 'int64']).columns.tolist()
-                kw_uang = ['rp', 'sales', 'margin', 'harga', 'amount', 'total', 'cost', 'jual', 'beli', 'net', 'prod']
-                def_rp = [col for col in num_cols if any(k in col.lower() for k in kw_uang)]
                 
-                with st.expander("💰 Format Rupiah", expanded=False):
-                    cols_fmt = st.multiselect("Pilih kolom Rp:", num_cols, default=def_rp, key=f"mny_{key_unik}")
+                # A. KATA KUNCI RUPIAH (Jadikan Rp ...)
+                kw_uang = ['rp', 'amount', 'total', 'cost', 'jual', 'beli', 'net', 'prod', 'price', 'margin']
+                # Pengecualian uang
+                kw_skip_uang = ['qty', '%', 'ach', 'no', 'nomor', 'prdcd', 'kode', 'id', 'plu', 'barcode']
+
+                def_rp = []
+                for col in num_cols:
+                    col_lower = col.lower()
+                    if any(k in col_lower for k in kw_uang) and not any(x in col_lower for x in kw_skip_uang):
+                        def_rp.append(col)
                 
+                with st.expander("💰 Pengaturan Format Angka", expanded=False):
+                    cols_fmt = st.multiselect("Kolom Format Rupiah (Rp):", num_cols, default=def_rp, key=f"mny_{key_unik}")
+                
+                # Terapkan Format Rupiah
                 if cols_fmt:
                     for c in cols_fmt: df[c] = df[c].apply(format_rupiah)
-                for c in [x for x in num_cols if x not in cols_fmt]:
-                    if pd.api.types.is_numeric_dtype(df[c]): df[c] = df[c].round(2)
+                
+                # B. FORMAT SISA KOLOM (ANGKA BIASA vs KODE)
+                sisa_cols = [x for x in num_cols if x not in cols_fmt]
+                
+                # Kata kunci untuk KODE (Prdcd, PLU) -> JANGAN DI FORMAT 1.000, biarkan 1000
+                kw_raw_code = ['prdcd', 'plu', 'barcode', 'kode', 'id', 'nik', 'no', 'nomor']
+
+                for c in sisa_cols:
+                    col_lower = c.lower()
+                    
+                    # Cek apakah ini KODE/PLU/PRDCD?
+                    if any(k in col_lower for k in kw_raw_code):
+                        # JADIKAN TEXT MENTAH (Hilangkan .0 jika ada)
+                        df[c] = df[c].astype(str).str.replace(r'\.0$', '', regex=True)
+                    
+                    # Jika bukan Kode (berarti Qty, %, Ach) -> Format Cantik (1.000)
+                    elif pd.api.types.is_numeric_dtype(df[c]):
+                        df[c] = df[c].apply(format_angka_biasa)
 
             st.dataframe(df, use_container_width=True, height=500)
             st.caption(f"Total: {len(df)} Baris")
@@ -286,19 +288,16 @@ def main():
 
     st.title("📊 Monitoring IC Bali")
     
-    # --- MENU UTAMA ---
     menu_options = ["Area", "Internal IC", "DC", "Lapor Error", "🔐 Admin Panel", "🎨 Tampilan Web"]
     menu = st.radio("Navigasi:", menu_options, horizontal=True)
     st.divider()
 
-    # --- 1. AREA ---
     if menu == "Area":
         t1, t2, t3 = st.tabs(["Intransit", "NKL", "Barang Rusak"])
         with t1: tampilkan_viewer("Intransit", ADMIN_CONFIG["AREA_INTRANSIT"]["folder"], all_files, "AREA_INTRANSIT")
         with t2: tampilkan_viewer("NKL", ADMIN_CONFIG["AREA_NKL"]["folder"], all_files, "AREA_NKL")
         with t3: tampilkan_viewer_area_rusak(ADMIN_CONFIG["AREA_RUSAK"]["folder"], all_files, "AREA_RUSAK")
 
-    # --- 2. INTERNAL IC ---
     elif menu == "Internal IC":
         if not st.session_state['auth_internal']:
             c1, c2, c3 = st.columns([1,2,1])
@@ -321,7 +320,6 @@ def main():
             with t2: tampilkan_viewer("NKL", ADMIN_CONFIG["INTERNAL_NKL"]["folder"], all_files, None)
             with t3: tampilkan_viewer("Rusak", ADMIN_CONFIG["INTERNAL_RUSAK"]["folder"], all_files, None)
 
-    # --- 3. DC ---
     elif menu == "DC":
         if not st.session_state['auth_dc']:
             c1, c2, c3 = st.columns([1,2,1])
@@ -341,7 +339,6 @@ def main():
                 st.rerun()
             tampilkan_viewer("Data DC", ADMIN_CONFIG["DC_DATA"]["folder"], all_files, None)
 
-    # --- 4. LAPOR ERROR ---
     elif menu == "Lapor Error":
         st.subheader("🚨 Lapor Error")
         up = st.file_uploader("Upload Screenshot", type=['png', 'jpg', 'jpeg'])
@@ -351,10 +348,8 @@ def main():
                 st.success("terima kasih, error anda akan diselesaikan sesuai mood admin :)")
                 st.balloons()
     
-    # --- 5. ADMIN PANEL ---
     elif menu == "🔐 Admin Panel":
         st.subheader("⚙️ Kelola Data (Admin Only)")
-        
         if st.session_state['admin_logged_in_key'] is None:
             c1, c2, c3 = st.columns([1, 2, 1])
             with c2:
@@ -379,17 +374,13 @@ def main():
                             st.session_state['admin_logged_in_key'] = sub_kd
                             st.rerun()
                         else: st.error("Username atau Password Salah")
-
         else:
             key = st.session_state['admin_logged_in_key']
             cfg = ADMIN_CONFIG[key]
-            
             st.success(f"✅ Login Berhasil: {cfg['label']}")
             st.info(f"📁 Folder Target Cloud: {cfg['folder']}")
             
             c_up, c_del = st.columns(2)
-            
-            # FITUR UPLOAD
             with c_up:
                 st.markdown("#### 📤 Upload File Baru")
                 with st.container(border=True):
@@ -400,18 +391,14 @@ def main():
                             get_all_files_cached.clear()
                             st.success("Berhasil diupload!")
                             st.rerun()
-
-            # FITUR HAPUS
             with c_del:
                 st.markdown("#### 🗑️ Hapus File Lama")
                 with st.container(border=True):
                     prefix = cfg['folder'] + "/"
                     my_files = [f for f in all_files if f['public_id'].startswith(prefix)]
-                    
                     if my_files:
                         d_del = {f['public_id'].replace(prefix, ""): f['public_id'] for f in my_files}
                         sel_del = st.selectbox("Pilih file yang akan dihapus:", list(d_del.keys()))
-                        
                         if st.button("❌ Hapus File Terpilih", use_container_width=True):
                             with st.spinner("Menghapus data..."):
                                 hapus_file(d_del[sel_del])
@@ -420,32 +407,25 @@ def main():
                                 st.rerun()
                     else:
                         st.write("Belum ada file di folder ini.")
-            
             st.divider()
             if st.button("🚪 Logout Admin"):
                 st.session_state['admin_logged_in_key'] = None
                 st.rerun()
 
-    # --- 6. TAMPILAN WEB ---
     elif menu == "🎨 Tampilan Web":
         st.subheader("🎨 Pengaturan Tampilan")
         st.write("Pilih mode tampilan yang nyaman untuk mata Anda.")
-        
         col_theme, col_blank = st.columns([1, 2])
         with col_theme:
             with st.container(border=True):
                 options = ["System", "Light", "Dark"]
-                # Default Dark jika session belum ada/valid
                 if st.session_state['current_theme'] not in options:
                     st.session_state['current_theme'] = "Dark"
-                
                 current_index = options.index(st.session_state['current_theme'])
                 selected_theme = st.radio("Pilih Mode:", options, index=current_index)
-                
                 if selected_theme != st.session_state['current_theme']:
                     st.session_state['current_theme'] = selected_theme
                     st.rerun()
-        
         st.info(f"Mode saat ini: **{st.session_state['current_theme']}**")
 
     st.markdown("""<div style='position: fixed; bottom: 0; right: 0; padding: 10px; opacity: 0.5; font-size: 12px; color: grey;'>Monitoring IC Bali System</div>""", unsafe_allow_html=True)
