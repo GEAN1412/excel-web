@@ -10,47 +10,18 @@ import io
 # --- 1. KONFIGURASI HALAMAN ---
 st.set_page_config(page_title="Web Monitoring IC Bali", layout="wide", page_icon="🏢")
 
-# --- 2. CSS & TEMA (FITUR BARU: LIGHT/DARK MODE) ---
+# --- 2. CSS & TEMA ---
 def atur_tema():
-    # Menu di Sidebar
     st.sidebar.markdown("---")
     st.sidebar.caption("🎨 Pengaturan Tampilan")
     pilih_tema = st.sidebar.radio(
-        "Mode Tampilan:",
-        ["System Default", "Light Mode", "Dark Mode"],
-        label_visibility="collapsed"
+        "Mode:", ["System", "Light", "Dark"], label_visibility="collapsed"
     )
+    if pilih_tema == "Dark":
+        st.markdown("""<style>.stApp {background-color: #0E1117; color: #FAFAFA;} [data-testid="stSidebar"] {background-color: #262730; color: #FAFAFA;} .stDataFrame { filter: invert(0); }</style>""", unsafe_allow_html=True)
+    elif pilih_tema == "Light":
+        st.markdown("""<style>.stApp {background-color: #FFFFFF; color: #000000;} [data-testid="stSidebar"] {background-color: #F0F2F6; color: #000000;}</style>""", unsafe_allow_html=True)
 
-    if pilih_tema == "Dark Mode":
-        st.markdown("""
-        <style>
-            .stApp {
-                background-color: #0E1117;
-                color: #FAFAFA;
-            }
-            [data-testid="stSidebar"] {
-                background-color: #262730;
-                color: #FAFAFA;
-            }
-            .stDataFrame { filter: invert(0); }
-        </style>
-        """, unsafe_allow_html=True)
-    elif pilih_tema == "Light Mode":
-        st.markdown("""
-        <style>
-            .stApp {
-                background-color: #FFFFFF;
-                color: #000000;
-            }
-            [data-testid="stSidebar"] {
-                background-color: #F0F2F6;
-                color: #000000;
-            }
-        </style>
-        """, unsafe_allow_html=True)
-    # Jika System Default, biarkan Streamlit mengatur sendiri
-
-# Sembunyikan Menu Bawaan Streamlit
 hide_st_style = """
             <style>
             #MainMenu {visibility: hidden;}
@@ -61,45 +32,29 @@ hide_st_style = """
             """
 st.markdown(hide_st_style, unsafe_allow_html=True)
 
-# --- 3. KONFIGURASI ADMIN ---
+# --- 3. CONFIG & DATA ---
 ADMIN_CONFIG = {
     "AREA_INTRANSIT": {"username": "admin_rep", "password": "123", "folder": "Area/Intransit", "label": "Area - Intransit/Proforma"},
-    "AREA_NKL": {"username": "admin_nkl", "password": "123", "folder": "Area/NKL", "label": "Area - NKL"},
-    "AREA_RUSAK": {"username": "admin_rusak", "password": "123", "folder": "Area/BarangRusak", "label": "Area - Barang Rusak"},
-    
+    "AREA_NKL": {"username": "admin_rep", "password": "123", "folder": "Area/NKL", "label": "Area - NKL"},
+    "AREA_RUSAK": {"username": "admin_rep", "password": "123", "folder": "Area/BarangRusak", "label": "Area - Barang Rusak"},
     "INTERNAL_REP": {"username": "admin_rep", "password": "123", "folder": "InternalIC/Reporting", "label": "Internal IC - Reporting"},
     "INTERNAL_NKL": {"username": "admin_nkl", "password": "123", "folder": "InternalIC/NKL", "label": "Internal IC - NKL"},
     "INTERNAL_RUSAK": {"username": "admin_rusak", "password": "123", "folder": "InternalIC/BarangRusak", "label": "Internal IC - Barang Rusak"},
-    
     "DC_DATA": {"username": "admin_dc", "password": "123", "folder": "DC/General", "label": "DC - Data Utama"}
 }
 
-# --- 4. DATA KONTAK (UPDATE SESUAI PERMINTAAN) ---
-# Hanya untuk Area
 DATA_CONTACT = {
-    "AREA_NKL": [
-        ("Putu IC", "087850110155"), 
-        ("Priyadi IC", "087761390987")
-    ],
-    "AREA_INTRANSIT": [
-        ("Muklis IC", "081934327289"), 
-        ("Proforma - Ari IC", "081353446516"),
-        ("NRB - Yani IC", "087760346299"), 
-        ("BPB/TAT - Tulasi IC", "081805347302")
-    ],
-    "AREA_RUSAK": [
-        ("Putu IC", "087850110155"), 
-        ("Dwi IC", "083114444424"),
-        ("Gean IC", "087725860048")
-    ]
+    "AREA_NKL": [("Putu IC", "087850110155"), ("Priyadi IC", "087761390987")],
+    "AREA_INTRANSIT": [("Muklis IC", "081934327289"), ("Proforma - Ari IC", "081353446516"), ("NRB - Yani IC", "087760346299"), ("BPB/TAT - Tulasi IC", "081805347302")],
+    "AREA_RUSAK": [("Putu IC", "087850110155"), ("Dwi IC", "083114444424"), ("Gean IC", "087725860048")]
 }
 
 VIEWER_CREDENTIALS = {
     "INTERNAL_IC": {"user": "ic_bli", "pass": "123456"},
-    "DC": {"user": "IC_DC", "pass": "123456"}
+    "DC": {"user": "ic_dc", "pass": "123456"}
 }
 
-# --- 5. FUNGSI SYSTEM ---
+# --- 4. SYSTEM FUNCTIONS (OPTIMIZED) ---
 def init_cloudinary():
     if "cloudinary" not in st.secrets:
         st.error("⚠️ Kunci Cloudinary belum dipasang!")
@@ -110,6 +65,16 @@ def init_cloudinary():
         api_secret=st.secrets["cloudinary"]["api_secret"],
         secure=True
     )
+
+# --- CACHING DAFTAR FILE (INI YANG BIKIN CEPAT) ---
+# TTL = 600 detik (10 menit). Data file disimpan di memori selama 10 menit.
+@st.cache_data(ttl=600, show_spinner=False) 
+def get_all_files_cached():
+    try:
+        raw = cloudinary.api.resources(resource_type="raw", type="upload", max_results=500)
+        return raw.get('resources', [])
+    except:
+        return []
 
 def upload_file(file_upload, folder_path):
     public_id_path = f"{folder_path}/{file_upload.name}"
@@ -155,14 +120,11 @@ def format_rupiah(nilai):
     except:
         return nilai
 
+# --- UI COMPONENTS ---
 def tampilkan_kontak(divisi_key):
-    # Jika key tidak ada atau None, jangan tampilkan apa-apa
-    if not divisi_key:
-        return
-
+    if not divisi_key: return
     kontak = DATA_CONTACT.get(divisi_key, [])
     if kontak:
-        # Gunakan nama yang lebih user friendly untuk judul expander
         judul = divisi_key.replace("AREA_", "Divisi ").replace("_", " ")
         with st.expander(f"📞 Contact Person (CP) - {judul}"):
             cols = st.columns(4)
@@ -170,7 +132,6 @@ def tampilkan_kontak(divisi_key):
                 wa = "62" + telp[1:] if telp.startswith("0") else telp
                 cols[i%4].info(f"**{nama}**\n[{telp}](https://wa.me/{wa})")
 
-# --- LOGIKA TAMPILAN UTAMA ---
 def proses_tampilkan_excel(url, key_unik):
     sheets = get_sheet_names(url)
     if sheets:
@@ -181,94 +142,82 @@ def proses_tampilkan_excel(url, key_unik):
         src = c3.text_input("Cari:", key=f"src_{key_unik}")
         fmt = c4.checkbox("Jaga Format Teks", key=f"fmt_{key_unik}")
         
-        with st.spinner("Loading..."):
+        with st.spinner("Loading Data..."): # Spinner biar user tau sedang proses
             df = load_excel_data(url, sh, hd, fmt)
         
         if df is not None:
-            if src:
-                df = df[df.astype(str).apply(lambda x: x.str.contains(src, case=False, na=False)).any(axis=1)]
-
+            if src: df = df[df.astype(str).apply(lambda x: x.str.contains(src, case=False, na=False)).any(axis=1)]
+            
             if not fmt:
-                numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns.tolist()
-                keywords_uang = ['rp', 'sales', 'margin', 'harga', 'amount', 'total', 'cost', 'jual', 'beli', 'net', 'prod']
-                default_rupiah = [col for col in numeric_cols if any(k in col.lower() for k in keywords_uang)]
+                num_cols = df.select_dtypes(include=['float64', 'int64']).columns.tolist()
+                kw_uang = ['rp', 'sales', 'margin', 'harga', 'amount', 'total', 'cost', 'jual', 'beli', 'net', 'prod']
+                def_rp = [col for col in num_cols if any(k in col.lower() for k in kw_uang)]
                 
                 with st.expander("💰 Format Rupiah", expanded=False):
-                    cols_to_format = st.multiselect("Pilih kolom Rp:", options=numeric_cols, default=default_rupiah, key=f"money_{key_unik}")
+                    cols_fmt = st.multiselect("Pilih kolom Rp:", num_cols, default=def_rp, key=f"mny_{key_unik}")
                 
-                if cols_to_format:
-                    for col in cols_to_format:
-                        df[col] = df[col].apply(format_rupiah)
-                    
-                sisa_cols = [c for c in numeric_cols if c not in cols_to_format]
-                for col in sisa_cols:
-                    if pd.api.types.is_numeric_dtype(df[col]):
-                        df[col] = df[col].round(2)
+                if cols_fmt:
+                    for c in cols_fmt: df[c] = df[c].apply(format_rupiah)
+                for c in [x for x in num_cols if x not in cols_fmt]:
+                    if pd.api.types.is_numeric_dtype(df[c]): df[c] = df[c].round(2)
 
             st.dataframe(df, use_container_width=True, height=500)
             st.caption(f"Total: {len(df)} Baris")
-        else:
-            st.error("Error load data.")
+        else: st.error("Gagal memuat data.")
 
 def tampilkan_viewer(judul_tab, folder_target, semua_files, kode_kontak=None):
-    # Tampilkan kontak hanya jika kode_kontak diberikan
     tampilkan_kontak(kode_kontak)
-    
     prefix = folder_target + "/"
     files_filtered = [f for f in semua_files if f['public_id'].startswith(prefix) and f['public_id'].endswith('.xlsx')]
     
     if not files_filtered:
-        st.info(f"📭 Kosong: {folder_target}")
+        st.info(f"📭 Data Kosong: {folder_target}")
         return
 
     dict_files = {f['public_id'].replace(prefix, ""): f['secure_url'] for f in files_filtered}
     unik = f"std_{folder_target}"
     pilih = st.selectbox(f"Pilih File {judul_tab}:", list(dict_files.keys()), key=f"sel_{unik}")
     
-    if pilih:
-        proses_tampilkan_excel(dict_files[pilih], unik)
+    if pilih: proses_tampilkan_excel(dict_files[pilih], unik)
 
 def tampilkan_viewer_area_rusak(folder_target, semua_files, kode_kontak=None):
     tampilkan_kontak(kode_kontak)
-    
     st.markdown("### ⚠️ Area - Barang Rusak")
-    kategori = st.radio("Filter:", ["Semua Data", "Say Bread", "Mr Bread", "Fried Chicken", "Onigiri"], horizontal=True)
+    kat = st.radio("Filter:", ["Semua Data", "Say Bread", "Mr Bread", "Fried Chicken", "Onigiri"], horizontal=True)
     st.divider()
 
     prefix = folder_target + "/"
     files_in = [f for f in semua_files if f['public_id'].startswith(prefix) and f['public_id'].endswith('.xlsx')]
     
-    if kategori == "Semua Data": files_final = files_in
-    elif kategori == "Say Bread": files_final = [f for f in files_in if "say bread" in f['public_id'].lower()]
-    elif kategori == "Mr Bread": files_final = [f for f in files_in if "mr bread" in f['public_id'].lower()]
-    elif kategori == "Fried Chicken": files_final = [f for f in files_in if "fried chicken" in f['public_id'].lower()]
-    elif kategori == "Onigiri": files_final = [f for f in files_in if "onigiri" in f['public_id'].lower()]
-    else: files_final = []
+    if kat == "Semua Data": ff = files_in
+    elif kat == "Say Bread": ff = [f for f in files_in if "say bread" in f['public_id'].lower()]
+    elif kat == "Mr Bread": ff = [f for f in files_in if "mr bread" in f['public_id'].lower()]
+    elif kat == "Fried Chicken": ff = [f for f in files_in if "fried chicken" in f['public_id'].lower()]
+    elif kat == "Onigiri": ff = [f for f in files_in if "onigiri" in f['public_id'].lower()]
+    else: ff = []
 
-    if not files_final:
-        st.warning(f"File '{kategori}' tidak ditemukan.")
+    if not ff:
+        st.warning(f"File '{kat}' tidak ditemukan.")
         return
 
-    dict_files = {f['public_id'].replace(prefix, ""): f['secure_url'] for f in files_final}
+    dict_files = {f['public_id'].replace(prefix, ""): f['secure_url'] for f in ff}
     unik = "area_rusak_special"
-    pilih = st.selectbox(f"Pilih File ({kategori}):", list(dict_files.keys()), key=f"sel_{unik}")
-    
-    if pilih:
-        proses_tampilkan_excel(dict_files[pilih], unik)
+    pilih = st.selectbox(f"Pilih File ({kat}):", list(dict_files.keys()), key=f"sel_{unik}")
+    if pilih: proses_tampilkan_excel(dict_files[pilih], unik)
 
-# --- PROGRAM UTAMA ---
+# --- MAIN APP ---
 def main():
     if 'auth_internal' not in st.session_state: st.session_state['auth_internal'] = False
     if 'auth_dc' not in st.session_state: st.session_state['auth_dc'] = False
     if 'admin_logged_in_key' not in st.session_state: st.session_state['admin_logged_in_key'] = None
 
     init_cloudinary()
-    try:
-        raw = cloudinary.api.resources(resource_type="raw", type="upload", max_results=500)
-        all_files = raw.get('resources', [])
-    except: all_files = []
+    
+    # --- OPTIMASI SPEED: CACHED FILE LIST ---
+    # Data file diambil dari cache (cepat), kecuali baru di-clear
+    all_files = get_all_files_cached()
 
-    # SIDEBAR ADMIN
+    # --- SIDEBAR ADMIN ---
     with st.sidebar:
         st.header("🔐 Admin Panel")
         if st.session_state['admin_logged_in_key'] is None:
@@ -297,8 +246,10 @@ def main():
             
             up = st.file_uploader("Upload Excel", type=['xlsx'])
             if up and st.button("Upload"):
-                with st.spinner("..."):
+                with st.spinner("Upload ke Cloud..."):
                     upload_file(up, cfg['folder'])
+                    # PENTING: Clear cache agar file baru langsung muncul
+                    get_all_files_cached.clear()
                     st.success("Sukses!")
                     st.rerun()
             
@@ -309,25 +260,27 @@ def main():
                 d_del = {f['public_id'].replace(prefix, ""): f['public_id'] for f in my_files}
                 sel_del = st.selectbox("Hapus File:", list(d_del.keys()))
                 if st.button("❌ Hapus"):
-                    hapus_file(d_del[sel_del])
-                    st.rerun()
+                    with st.spinner("Menghapus..."):
+                        hapus_file(d_del[sel_del])
+                        # PENTING: Clear cache setelah hapus
+                        get_all_files_cached.clear()
+                        st.success("Terhapus")
+                        st.rerun()
             
             st.divider()
             if st.button("Logout"):
                 st.session_state['admin_logged_in_key'] = None
                 st.rerun()
 
-    # SETUP TEMA (DI SIDEBAR BAWAH)
     atur_tema()
 
-    # CONTENT UTAMA
+    # --- MAIN UI ---
     st.title("📊 Monitoring IC Bali")
     menu = st.radio("Menu:", ["Area", "Internal IC", "DC", "Lapor Error"], horizontal=True)
     st.divider()
 
     if menu == "Area":
         t1, t2, t3 = st.tabs(["Intransit", "NKL", "Barang Rusak"])
-        # Perhatikan kode kontak hanya dikirim di sini (AREA_...)
         with t1: tampilkan_viewer("Intransit", ADMIN_CONFIG["AREA_INTRANSIT"]["folder"], all_files, "AREA_INTRANSIT")
         with t2: tampilkan_viewer("NKL", ADMIN_CONFIG["AREA_NKL"]["folder"], all_files, "AREA_NKL")
         with t3: tampilkan_viewer_area_rusak(ADMIN_CONFIG["AREA_RUSAK"]["folder"], all_files, "AREA_RUSAK")
@@ -350,7 +303,6 @@ def main():
                 st.session_state['auth_internal'] = False
                 st.rerun()
             t1, t2, t3 = st.tabs(["Reporting", "NKL", "Rusak"])
-            # Kode Kontak dikosongkan (None) agar CP tidak muncul
             with t1: tampilkan_viewer("Reporting", ADMIN_CONFIG["INTERNAL_REP"]["folder"], all_files, None)
             with t2: tampilkan_viewer("NKL", ADMIN_CONFIG["INTERNAL_NKL"]["folder"], all_files, None)
             with t3: tampilkan_viewer("Rusak", ADMIN_CONFIG["INTERNAL_RUSAK"]["folder"], all_files, None)
@@ -372,7 +324,6 @@ def main():
             if st.button("Lock DC"): 
                 st.session_state['auth_dc'] = False
                 st.rerun()
-            # Kode Kontak dikosongkan (None)
             tampilkan_viewer("Data DC", ADMIN_CONFIG["DC_DATA"]["folder"], all_files, None)
 
     elif menu == "Lapor Error":
