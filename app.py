@@ -19,7 +19,6 @@ def atur_tema():
     if 'current_theme' not in st.session_state:
         st.session_state['current_theme'] = "Dark" 
 
-    # CSS Global
     st.markdown("""
         <style>
             [data-testid="stToolbar"] {visibility: hidden; display: none !important;}
@@ -81,7 +80,6 @@ VIEWER_CREDENTIALS = {
     "DC": {"user": "ic_dc", "pass": "123456"}
 }
 
-
 # --- 4. SYSTEM FUNCTIONS ---
 def init_cloudinary():
     if "cloudinary" not in st.secrets:
@@ -123,7 +121,6 @@ def load_excel_data(url, sheet_name, header_row, force_text=False):
     try:
         response = requests.get(url)
         file_content = io.BytesIO(response.content)
-        
         # Hitung index row (User input 1 -> Index 0)
         row_idx = header_row - 1 if header_row > 0 else 0
         
@@ -176,25 +173,18 @@ def proses_tampilkan_excel(url, key_unik):
         c1, c2 = st.columns(2)
         sh = c1.selectbox("Sheet:", sheets, key=f"sh_{key_unik}")
         hd = c2.number_input("Header:", 1, key=f"hd_{key_unik}")
-        c3, c4 = st.columns([2, 1])
-        src = c3.text_input("Cari:", key=f"src_{key_unik}")
-        fmt = c4.checkbox("Jaga Semua Teks (No HP/NIK)", key=f"fmt_{key_unik}")
+        
+        # Opsi Format Text
+        fmt = st.checkbox("Jaga Semua Teks (No HP/NIK)", key=f"fmt_{key_unik}")
         
         with st.spinner("Loading Data..."): 
-            # 1. LOAD DATA RAW (DATA MENTAH)
             df_raw = load_excel_data(url, sh, hd, fmt)
         
         if df_raw is not None:
-            # Filter Search
-            if src:
-                try:
-                    mask = df_raw.astype(str).apply(lambda x: x.str.contains(src, case=False, na=False)).any(axis=1)
-                    df_raw = df_raw[mask]
-                except: pass
-
-            # 2. BUAT DATA TAMPILAN
+            # COPY untuk tampilan
             df_display = df_raw.copy()
 
+            # --- LOGIKA FORMATTING TAMPILAN (SEBELUM FILTER) ---
             if not fmt:
                 num_cols = df_display.select_dtypes(include=['float64', 'int64']).columns.tolist()
                 kw_raw_code = ['prdcd', 'plu', 'barcode', 'kode', 'id', 'nik', 'no', 'nomor']
@@ -202,24 +192,73 @@ def proses_tampilkan_excel(url, key_unik):
                 for col in num_cols:
                     try:
                         col_str = str(col).lower()
-                        # KODE/PLU: Jadikan String tanpa .0
                         if any(k in col_str for k in kw_raw_code):
                             df_display[col] = df_display[col].astype(str).str.replace(r'\.0$', '', regex=True)
-                        # ANGKA/UANG: Format Ribuan
                         elif pd.api.types.is_numeric_dtype(df_display[col]):
                             df_display[col] = df_display[col].apply(format_ribuan_indo)
                     except: continue
 
+            # --- FITUR BARU: ADVANCED FILTERING (MULTI KONDISI) ---
+            st.divider()
+            
+            # Layout Filter: Global Search Kiri, Advanced Kanan
+            col_search, col_adv = st.columns([1, 2])
+            
+            with col_search:
+                src = st.text_input("🔍 Cari Cepat (Semua Kolom):", key=f"src_{key_unik}")
+            
+            # Container Filter Lanjutan
+            with col_adv:
+                with st.expander("📂 Filter Multi-Kolom (Klik disini)"):
+                    # Pilih kolom apa saja yang mau difilter
+                    filter_cols = st.multiselect("Pilih Kolom untuk difilter:", df_display.columns, key=f"mc_{key_unik}")
+                    
+                    filters = {}
+                    if filter_cols:
+                        cols_ui = st.columns(len(filter_cols))
+                        for idx, col in enumerate(filter_cols):
+                            # Buat input text untuk setiap kolom yang dipilih
+                            with cols_ui[idx]:
+                                val = st.text_input(f"Isi {col}:", key=f"f_{col}_{key_unik}")
+                                if val:
+                                    filters[col] = val
+
+            # --- PENERAPAN FILTER ---
+            
+            # 1. Filter Global Search
+            if src:
+                try:
+                    mask_src = df_display.astype(str).apply(lambda x: x.str.contains(src, case=False, na=False)).any(axis=1)
+                    df_display = df_display[mask_src]
+                except: pass
+
+            # 2. Filter Multi-Kolom
+            if filters:
+                for col_name, search_val in filters.items():
+                    try:
+                        # Filter pada df_display (yang sudah diformat) agar user mencari apa yang mereka lihat
+                        df_display = df_display[df_display[col_name].astype(str).str.contains(search_val, case=False, na=False)]
+                    except: pass
+
+            # --- SINKRONISASI DATA RAW UNTUK DOWNLOAD ---
+            # Kita ambil index dari df_display yang sudah terfilter
+            # Lalu kita ambil baris yang sama dari df_raw (data asli)
+            try:
+                df_download = df_raw.loc[df_display.index]
+            except:
+                df_download = df_raw # Fallback jika error index
+
+            # TAMPILKAN
             st.dataframe(df_display, use_container_width=True, height=500)
             
-            # DOWNLOAD BUTTON
-            csv = df_raw.to_csv(index=False).encode('utf-8')
+            # DOWNLOAD
+            csv = df_download.to_csv(index=False).encode('utf-8')
             col_info, col_dl = st.columns([3, 1])
             with col_info:
-                st.caption(f"Total: {len(df_raw)} Baris")
+                st.caption(f"Total: {len(df_display)} Baris (Tefilter)")
             with col_dl:
                 st.download_button(
-                    label="📥 Download CSV (Format Asli)",
+                    label="📥 Download CSV (Hasil Filter)",
                     data=csv,
                     file_name=f"Data_Export_{sh}.csv",
                     mime='text/csv',
@@ -243,25 +282,21 @@ def tampilkan_viewer(judul_tab, folder_target, semua_files, kode_kontak=None):
     
     if pilih: proses_tampilkan_excel(dict_files[pilih], unik)
 
-# --- UPDATE DI SINI (TAMBAH 'DRY') ---
 def tampilkan_viewer_area_rusak(folder_target, semua_files, kode_kontak=None):
     tampilkan_kontak(kode_kontak)
     st.markdown("### ⚠️ Area - Barang Rusak")
-    
-    # Tambahkan "DRY" di list pilihan
     kat = st.radio("Filter:", ["Semua Data", "Say Bread", "Mr Bread", "Fried Chicken", "Onigiri", "DRY"], horizontal=True)
     st.divider()
 
     prefix = folder_target + "/"
     files_in = [f for f in semua_files if f['public_id'].startswith(prefix) and f['public_id'].endswith('.xlsx')]
     
-    # Logic Filter
     if kat == "Semua Data": ff = files_in
     elif kat == "Say Bread": ff = [f for f in files_in if "say bread" in f['public_id'].lower()]
     elif kat == "Mr Bread": ff = [f for f in files_in if "mr bread" in f['public_id'].lower()]
     elif kat == "Fried Chicken": ff = [f for f in files_in if "fried chicken" in f['public_id'].lower()]
     elif kat == "Onigiri": ff = [f for f in files_in if "onigiri" in f['public_id'].lower()]
-    elif kat == "DRY": ff = [f for f in files_in if "dry" in f['public_id'].lower()] # <-- LOGIC BARU DRY
+    elif kat == "DRY": ff = [f for f in files_in if "dry" in f['public_id'].lower()]
     else: ff = []
 
     if not ff:
