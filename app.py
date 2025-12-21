@@ -19,6 +19,7 @@ def atur_tema():
     if 'current_theme' not in st.session_state:
         st.session_state['current_theme'] = "Dark" 
 
+    # CSS Global
     st.markdown("""
         <style>
             [data-testid="stToolbar"] {visibility: hidden; display: none !important;}
@@ -80,6 +81,7 @@ VIEWER_CREDENTIALS = {
     "DC": {"user": "ic_dc", "pass": "123456"}
 }
 
+
 # --- 4. SYSTEM FUNCTIONS ---
 def init_cloudinary():
     if "cloudinary" not in st.secrets:
@@ -121,10 +123,17 @@ def load_excel_data(url, sheet_name, header_row, force_text=False):
     try:
         response = requests.get(url)
         file_content = io.BytesIO(response.content)
+        
+        # Hitung index row (User input 1 -> Index 0)
+        row_idx = header_row - 1 if header_row > 0 else 0
+        
         if force_text:
-            df = pd.read_excel(file_content, sheet_name=sheet_name, header=header_row - 1, dtype=str).fillna("")
+            df = pd.read_excel(file_content, sheet_name=sheet_name, header=row_idx, dtype=str).fillna("")
         else:
-            df = pd.read_excel(file_content, sheet_name=sheet_name, header=header_row - 1)
+            df = pd.read_excel(file_content, sheet_name=sheet_name, header=row_idx)
+        
+        # Paksa nama kolom jadi string
+        df.columns = df.columns.astype(str)
         return df
     except:
         return None
@@ -137,7 +146,7 @@ def get_sheet_names(url):
     except:
         return []
 
-# --- 5. FORMATTING (HANYA UNTUK TAMPILAN) ---
+# --- 5. FORMATTING FUNCTIONS ---
 def format_ribuan_indo(nilai):
     try:
         if float(nilai) % 1 != 0:
@@ -173,42 +182,38 @@ def proses_tampilkan_excel(url, key_unik):
         
         with st.spinner("Loading Data..."): 
             # 1. LOAD DATA RAW (DATA MENTAH)
-            # Data ini yang akan dipakai untuk DOWNLOAD (Masih format angka asli)
             df_raw = load_excel_data(url, sh, hd, fmt)
         
         if df_raw is not None:
-            # Filter Search (Diterapkan ke df_raw dulu)
+            # Filter Search
             if src:
-                mask = df_raw.astype(str).apply(lambda x: x.str.contains(src, case=False, na=False)).any(axis=1)
-                df_raw = df_raw[mask]
+                try:
+                    mask = df_raw.astype(str).apply(lambda x: x.str.contains(src, case=False, na=False)).any(axis=1)
+                    df_raw = df_raw[mask]
+                except: pass
 
-            # 2. BUAT DATA TAMPILAN (DATA CANTIK)
-            # Kita copy agar df_raw tidak ikut berubah jadi string
+            # 2. BUAT DATA TAMPILAN
             df_display = df_raw.copy()
 
-            # --- LOGIC FORMATTING (HANYA KE DF_DISPLAY) ---
             if not fmt:
                 num_cols = df_display.select_dtypes(include=['float64', 'int64']).columns.tolist()
                 kw_raw_code = ['prdcd', 'plu', 'barcode', 'kode', 'id', 'nik', 'no', 'nomor']
 
                 for col in num_cols:
-                    col_lower = col.lower()
-                    
-                    # KODE/PLU: Jadikan String tanpa .0
-                    if any(k in col_lower for k in kw_raw_code):
-                        df_display[col] = df_display[col].astype(str).str.replace(r'\.0$', '', regex=True)
-                    
-                    # ANGKA/UANG: Format Ribuan
-                    elif pd.api.types.is_numeric_dtype(df_display[col]):
-                        df_display[col] = df_display[col].apply(format_ribuan_indo)
+                    try:
+                        col_str = str(col).lower()
+                        # KODE/PLU: Jadikan String tanpa .0
+                        if any(k in col_str for k in kw_raw_code):
+                            df_display[col] = df_display[col].astype(str).str.replace(r'\.0$', '', regex=True)
+                        # ANGKA/UANG: Format Ribuan
+                        elif pd.api.types.is_numeric_dtype(df_display[col]):
+                            df_display[col] = df_display[col].apply(format_ribuan_indo)
+                    except: continue
 
-            # TAMPILKAN DI LAYAR (YANG CANTIK)
             st.dataframe(df_display, use_container_width=True, height=500)
             
-            # TOMBOL DOWNLOAD (YANG MENTAH/ASLI)
-            # Kita convert df_raw ke CSV
+            # DOWNLOAD BUTTON
             csv = df_raw.to_csv(index=False).encode('utf-8')
-            
             col_info, col_dl = st.columns([3, 1])
             with col_info:
                 st.caption(f"Total: {len(df_raw)} Baris")
@@ -220,8 +225,8 @@ def proses_tampilkan_excel(url, key_unik):
                     mime='text/csv',
                     key=f"dl_{key_unik}"
                 )
-
-        else: st.error("Gagal memuat data.")
+        else:
+            st.warning("⚠️ Gagal membaca data. Coba ganti angka 'Header'.")
 
 def tampilkan_viewer(judul_tab, folder_target, semua_files, kode_kontak=None):
     tampilkan_kontak(kode_kontak)
@@ -238,20 +243,25 @@ def tampilkan_viewer(judul_tab, folder_target, semua_files, kode_kontak=None):
     
     if pilih: proses_tampilkan_excel(dict_files[pilih], unik)
 
+# --- UPDATE DI SINI (TAMBAH 'DRY') ---
 def tampilkan_viewer_area_rusak(folder_target, semua_files, kode_kontak=None):
     tampilkan_kontak(kode_kontak)
     st.markdown("### ⚠️ Area - Barang Rusak")
-    kat = st.radio("Filter:", ["Semua Data", "Say Bread", "Mr Bread", "Fried Chicken", "Onigiri"], horizontal=True)
+    
+    # Tambahkan "DRY" di list pilihan
+    kat = st.radio("Filter:", ["Semua Data", "Say Bread", "Mr Bread", "Fried Chicken", "Onigiri", "DRY"], horizontal=True)
     st.divider()
 
     prefix = folder_target + "/"
     files_in = [f for f in semua_files if f['public_id'].startswith(prefix) and f['public_id'].endswith('.xlsx')]
     
+    # Logic Filter
     if kat == "Semua Data": ff = files_in
     elif kat == "Say Bread": ff = [f for f in files_in if "say bread" in f['public_id'].lower()]
     elif kat == "Mr Bread": ff = [f for f in files_in if "mr bread" in f['public_id'].lower()]
     elif kat == "Fried Chicken": ff = [f for f in files_in if "fried chicken" in f['public_id'].lower()]
     elif kat == "Onigiri": ff = [f for f in files_in if "onigiri" in f['public_id'].lower()]
+    elif kat == "DRY": ff = [f for f in files_in if "dry" in f['public_id'].lower()] # <-- LOGIC BARU DRY
     else: ff = []
 
     if not ff:
