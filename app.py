@@ -124,27 +124,18 @@ def hapus_file(public_id):
     except:
         return False
 
-# --- FUNGSI DATABASE (SOLUSI FRESH DATA) ---
-
+# --- FUNGSI DATABASE (REALTIME) ---
 def get_json_fresh(public_id):
-    """
-    Mengambil file JSON (User/Log) dengan memaksa Cloudinary memberikan versi terbaru.
-    Menghindari Cache yang membuat data telat update.
-    """
     try:
-        # Minta detail resource via API untuk dapat URL Ber-versi (v1234...)
         resource = cloudinary.api.resource(public_id, resource_type="raw")
         url = resource.get('secure_url')
-        
         if url:
-            # Tambahkan timestamp random agar request HTTP benar-benar baru
             url_no_cache = f"{url}?t={int(time.time())}"
             resp = requests.get(url_no_cache)
             if resp.status_code == 200:
                 return resp.json()
         return {}
     except:
-        # Jika file belum ada
         return {}
 
 def upload_json_to_cloud(data_dict, public_id):
@@ -157,13 +148,9 @@ def upload_json_to_cloud(data_dict, public_id):
     )
 
 def catat_login_activity(username):
-    """Mencatat login dengan aman (Download Fresh -> Update -> Upload)"""
     try:
-        # 1. Download Log Paling Baru (Anti-Cache)
         log_data = get_json_fresh(LOG_DB_PATH)
-        
-        # 2. Update Data
-        now = datetime.utcnow() + timedelta(hours=8) # WITA
+        now = datetime.utcnow() + timedelta(hours=8)
         tanggal_str = now.strftime("%Y-%m-%d")
         
         if tanggal_str not in log_data:
@@ -173,8 +160,6 @@ def catat_login_activity(username):
             log_data[tanggal_str][username] = 0
             
         log_data[tanggal_str][username] += 1
-        
-        # 3. Upload Balik
         upload_json_to_cloud(log_data, LOG_DB_PATH)
     except Exception as e:
         print(f"Gagal mencatat log: {e}")
@@ -330,7 +315,6 @@ def tampilkan_viewer_area_rusak(folder_target, semua_files, kode_kontak=None):
 
 # --- MAIN APP ---
 def main():
-    # Session State Init
     if 'auth_internal' not in st.session_state: st.session_state['auth_internal'] = False
     if 'auth_dc' not in st.session_state: st.session_state['auth_dc'] = False
     if 'auth_area' not in st.session_state: st.session_state['auth_area'] = False
@@ -359,7 +343,6 @@ def main():
                         u = st.text_input("Username")
                         p = st.text_input("Password", type="password")
                         if st.form_submit_button("Masuk"):
-                            # PANGGIL FUNGSI FRESH (Anti Cache)
                             with st.spinner("Memverifikasi..."):
                                 db_users = get_json_fresh(USER_DB_PATH) 
                                 p_hash = hash_password(p)
@@ -373,17 +356,33 @@ def main():
                                     st.error("Username atau Password Salah (atau data belum update, coba 1 menit lagi)")
                     
                     with st.expander("❓ Lupa Password?"):
-                        st.warning("Hubungi Admin Divisi NKL/Reporting.")
+                        st.write("Silakan hubungi Gean untuk reset password.")
+                        # TOMBOL WHATSAPP LANGSUNG
+                        st.markdown(
+                            """<a href="https://wa.me/6287725860048?text=Halo%20Gean,%20saya%20lupa%20password%20Web%20Monitoring%20Area" target="_blank">
+                            <button style="background-color:#25D366; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer;">
+                            📲 Hubungi Gean via WhatsApp
+                            </button></a>""", 
+                            unsafe_allow_html=True
+                        )
 
                 with tab_daftar:
                     with st.form("daftar_area"):
                         st.write("Buat akun baru")
                         new_u = st.text_input("Username Baru")
                         new_p = st.text_input("Password Baru", type="password")
-                        if st.form_submit_button("Daftar"):
+                        
+                        # LAYOUT TOMBOL DAN KETERANGAN SEJAJAR
+                        c_btn, c_note = st.columns([1, 2])
+                        with c_btn:
+                            submit_daftar = st.form_submit_button("Daftar Akun")
+                        with c_note:
+                            # KETERANGAN TAMBAHAN
+                            st.caption("ℹ️ **AS & AM** sebaiknya menggunakan inisial nama untuk username.")
+
+                        if submit_daftar:
                             if new_u and new_p:
                                 with st.spinner("Mendaftarkan..."):
-                                    # Ambil DB fresh dulu sebelum nambah
                                     db_users = get_json_fresh(USER_DB_PATH)
                                     if new_u in db_users:
                                         st.error("Username sudah dipakai!")
@@ -391,7 +390,6 @@ def main():
                                         db_users[new_u] = hash_password(new_p)
                                         upload_json_to_cloud(db_users, USER_DB_PATH)
                                         
-                                        # AUTO LOGIN SETELAH DAFTAR (SOLUSI UX)
                                         st.session_state['auth_area'] = True
                                         st.session_state['area_user_name'] = new_u
                                         catat_login_activity(new_u)
