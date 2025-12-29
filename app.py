@@ -86,6 +86,7 @@ VIEWER_CREDENTIALS = {
     "DC": {"user": "ic_dc", "pass": "123456"}
 }
 
+
 # --- 5. SYSTEM FUNCTIONS ---
 def init_cloudinary():
     if "cloudinary" not in st.secrets:
