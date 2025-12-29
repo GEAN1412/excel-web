@@ -66,13 +66,13 @@ terapkan_css()
 
 # --- 4. CONFIG DATA ---
 ADMIN_CONFIG = {
-    "AREA_INTRANSIT": {"username": "admin_rep", "password": "123456", "folder": "Area/Intransit", "label": "Area - Intransit/Proforma"},
-    "AREA_NKL": {"username": "admin_nkl", "password": "123456", "folder": "Area/NKL", "label": "Area - NKL"},
-    "AREA_RUSAK": {"username": "admin_rusak", "password": "123456", "folder": "Area/BarangRusak", "label": "Area - Barang Rusak"},
-    "INTERNAL_REP": {"username": "admin_rep", "password": "123456", "folder": "InternalIC/Reporting", "label": "Internal IC - Reporting"},
-    "INTERNAL_NKL": {"username": "admin_nkl", "password": "123456", "folder": "InternalIC/NKL", "label": "Internal IC - NKL"},
-    "INTERNAL_RUSAK": {"username": "admin_rusak", "password": "123456", "folder": "InternalIC/BarangRusak", "label": "Internal IC - Barang Rusak"},
-    "DC_DATA": {"username": "admin_dc", "password": "123456", "folder": "DC/General", "label": "DC - Data Utama"}
+    "AREA_INTRANSIT": {"username": "admin_area_prof", "password": "123", "folder": "Area/Intransit", "label": "Area - Intransit/Proforma"},
+    "AREA_NKL": {"username": "admin_area_nkl", "password": "123", "folder": "Area/NKL", "label": "Area - NKL"},
+    "AREA_RUSAK": {"username": "admin_area_rusak", "password": "123", "folder": "Area/BarangRusak", "label": "Area - Barang Rusak"},
+    "INTERNAL_REP": {"username": "admin_ic_rep", "password": "123", "folder": "InternalIC/Reporting", "label": "Internal IC - Reporting"},
+    "INTERNAL_NKL": {"username": "admin_ic_nkl", "password": "123", "folder": "InternalIC/NKL", "label": "Internal IC - NKL"},
+    "INTERNAL_RUSAK": {"username": "admin_ic_rusak", "password": "123", "folder": "InternalIC/BarangRusak", "label": "Internal IC - Barang Rusak"},
+    "DC_DATA": {"username": "admin_dc", "password": "123", "folder": "DC/General", "label": "DC - Data Utama"}
 }
 
 DATA_CONTACT = {
@@ -83,7 +83,7 @@ DATA_CONTACT = {
 
 VIEWER_CREDENTIALS = {
     "INTERNAL_IC": {"user": "ic_bli", "pass": "123456"},
-    "DC": {"user": "ic_dc", "pass": "123456"}
+    "DC": {"user": "IC_DC", "pass": "123456"}
 }
 
 # --- 5. SYSTEM FUNCTIONS ---
