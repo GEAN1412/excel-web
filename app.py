@@ -353,11 +353,10 @@ def main():
                                     st.success("Login Berhasil!")
                                     st.rerun()
                                 else:
-                                    st.error("Username atau Password Salah (atau data belum update, coba 1 menit lagi)")
+                                    st.error("Username atau Password Salah")
                     
                     with st.expander("❓ Lupa Password?"):
                         st.write("Silakan hubungi Gean untuk reset password.")
-                        # TOMBOL WHATSAPP LANGSUNG
                         st.markdown(
                             """<a href="https://wa.me/6287725860048?text=Halo%20Gean,%20saya%20lupa%20password%20Web%20Monitoring%20Area" target="_blank">
                             <button style="background-color:#25D366; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer;">
@@ -372,12 +371,10 @@ def main():
                         new_u = st.text_input("Username Baru")
                         new_p = st.text_input("Password Baru", type="password")
                         
-                        # LAYOUT TOMBOL DAN KETERANGAN SEJAJAR
                         c_btn, c_note = st.columns([1, 2])
                         with c_btn:
                             submit_daftar = st.form_submit_button("Daftar Akun")
                         with c_note:
-                            # KETERANGAN TAMBAHAN
                             st.caption("ℹ️ **AS & AM** sebaiknya menggunakan inisial nama untuk username.")
 
                         if submit_daftar:
@@ -544,14 +541,35 @@ def main():
                         db_users = get_json_fresh(USER_DB_PATH)
                         if db_users:
                             st.write(f"Total User: **{len(db_users)}**")
-                            pilih_user = st.selectbox("Pilih Username:", list(db_users.keys()))
-                            new_pass = st.text_input("Password Baru:", type="password")
-                            if st.button("Reset Password", use_container_width=True):
+                            
+                            # SELECT USER
+                            pilih_user = st.selectbox("Pilih Username:", list(db_users.keys()), key="sel_user_mgr")
+                            
+                            st.markdown("---")
+                            st.caption("Ganti Password:")
+                            new_pass = st.text_input("Password Baru:", type="password", key="inp_new_pass")
+                            if st.button("Simpan Password Baru", use_container_width=True):
                                 if new_pass:
                                     db_users[pilih_user] = hash_password(new_pass)
                                     upload_json_to_cloud(db_users, USER_DB_PATH)
-                                    st.success(f"Pass '{pilih_user}' direset!")
+                                    st.success(f"Password '{pilih_user}' berhasil diubah!")
+                                    time.sleep(1)
+                                    st.rerun()
                                 else: st.warning("Password kosong!")
+                            
+                            st.markdown("---")
+                            st.caption("Hapus User:")
+                            # FITUR BARU: HAPUS USER
+                            if st.button("❌ Hapus User Ini", type="primary", use_container_width=True):
+                                try:
+                                    del db_users[pilih_user]
+                                    upload_json_to_cloud(db_users, USER_DB_PATH)
+                                    st.success(f"User '{pilih_user}' telah dihapus!")
+                                    time.sleep(1)
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Gagal: {e}")
+
                         else: st.info("Belum ada user.")
 
                 with col_monitor:
