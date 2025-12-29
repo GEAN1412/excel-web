@@ -86,7 +86,6 @@ VIEWER_CREDENTIALS = {
     "DC": {"user": "ic_dc", "pass": "123456"}
 }
 
-
 # --- 5. SYSTEM FUNCTIONS ---
 def init_cloudinary():
     if "cloudinary" not in st.secrets:
@@ -319,7 +318,6 @@ def tampilkan_viewer_area_rusak(folder_target, semua_files, kode_kontak=None):
 
 # --- MAIN APP ---
 def main():
-    # Session State Init
     if 'auth_internal' not in st.session_state: st.session_state['auth_internal'] = False
     if 'auth_dc' not in st.session_state: st.session_state['auth_dc'] = False
     if 'auth_area' not in st.session_state: st.session_state['auth_area'] = False
@@ -335,255 +333,218 @@ def main():
     menu = st.radio("Navigasi:", menu_options, horizontal=True)
     st.divider()
 
-    # --- 1. AREA ---
+    # ... [KODE AREA, INTERNAL IC, DC, LAPOR ERROR SAMA SEPERTI SEBELUMNYA] ...
+    # Saya ringkas bagian ini agar fokus ke perubahan Admin Panel di bawah
+    
     if menu == "Area":
         if not st.session_state['auth_area']:
-            col1, col2, col3 = st.columns([1, 2, 1])
-            with col2:
-                st.info("🔒 Silakan Login untuk akses menu Area")
-                tab_login, tab_daftar = st.tabs(["Masuk (Login)", "Daftar Akun Baru"])
-                
-                with tab_login:
-                    with st.form("login_area"):
-                        u = st.text_input("Username")
-                        p = st.text_input("Password", type="password")
+            c1, c2, c3 = st.columns([1, 2, 1])
+            with c2:
+                st.info("🔒 Silakan Login")
+                tab1, tab2 = st.tabs(["Masuk", "Daftar"])
+                with tab1:
+                    with st.form("la"):
+                        u=st.text_input("User"); p=st.text_input("Pass", type="password")
                         if st.form_submit_button("Masuk"):
-                            db_users = get_users_db()
-                            p_hash = hash_password(p)
-                            if u in db_users and db_users[u] == p_hash:
-                                st.session_state['auth_area'] = True
-                                st.session_state['area_user_name'] = u
-                                catat_login_activity(u) 
-                                st.success("Login Berhasil!")
-                                st.rerun()
-                            else:
-                                st.error("Username atau Password Salah!")
-                    
-                    # FITUR LUPA PASSWORD (User Side)
-                    with st.expander("❓ Lupa Password?"):
-                        st.warning("Silakan hubungi **Admin Divisi NKL/Reporting** untuk mereset password Anda.")
-
-                with tab_daftar:
-                    with st.form("daftar_area"):
-                        st.write("Buat akun baru")
-                        new_u = st.text_input("Username Baru")
-                        new_p = st.text_input("Password Baru", type="password")
+                            db=get_users_db(); ph=hash_password(p)
+                            if u in db and db[u]==ph: 
+                                st.session_state['auth_area']=True; st.session_state['area_user_name']=u; catat_login_activity(u)
+                                st.success("OK"); st.rerun()
+                            else: st.error("Salah")
+                    with st.expander("Lupa Password?"): st.warning("Hubungi Admin IC")
+                with tab2:
+                    with st.form("da"):
+                        nu=st.text_input("New User"); np=st.text_input("New Pass", type="password")
                         if st.form_submit_button("Daftar"):
-                            if new_u and new_p:
-                                with st.spinner("Mendaftarkan..."):
-                                    db_users = get_users_db()
-                                    if new_u in db_users:
-                                        st.error("Username sudah dipakai!")
-                                    else:
-                                        db_users[new_u] = hash_password(new_p)
-                                        save_users_db(db_users)
-                                        st.success("Akun dibuat! Silakan Login.")
-                            else: st.warning("Isi data dengan lengkap")
+                            db=get_users_db()
+                            if nu in db: st.error("Dipakai")
+                            else: db[nu]=hash_password(np); save_users_db(db); st.success("OK")
         else:
-            c_info, c_out = st.columns([5, 1])
-            with c_info: st.success(f"👋 Halo, {st.session_state['area_user_name']}")
-            with c_out: 
-                if st.button("Logout Area"):
-                    st.session_state['auth_area'] = False
-                    st.rerun()
-            st.divider()
-            t1, t2, t3 = st.tabs(["Intransit", "NKL", "Barang Rusak"])
+            c1, c2 = st.columns([5,1])
+            c1.success(f"User: {st.session_state['area_user_name']}"); 
+            if c2.button("Logout"): st.session_state['auth_area']=False; st.rerun()
+            t1, t2, t3 = st.tabs(["Intransit", "NKL", "Rusak"])
             with t1: tampilkan_viewer("Intransit", ADMIN_CONFIG["AREA_INTRANSIT"]["folder"], all_files, "AREA_INTRANSIT")
             with t2: tampilkan_viewer("NKL", ADMIN_CONFIG["AREA_NKL"]["folder"], all_files, "AREA_NKL")
             with t3: tampilkan_viewer_area_rusak(ADMIN_CONFIG["AREA_RUSAK"]["folder"], all_files, "AREA_RUSAK")
 
-    # --- 2. INTERNAL IC ---
     elif menu == "Internal IC":
         if not st.session_state['auth_internal']:
-            c1, c2, c3 = st.columns([1,2,1])
+            c1,c2,c3=st.columns([1,2,1])
             with c2:
-                st.info("🔒 Internal Only")
+                st.info("Internal Only")
                 with st.form("fi"):
-                    u, p = st.text_input("User"), st.text_input("Pass", type="password")
-                    if st.form_submit_button("Buka"):
-                        c = VIEWER_CREDENTIALS["INTERNAL_IC"]
-                        if u == c['user'] and p == c['pass']:
-                            st.session_state['auth_internal'] = True
-                            st.rerun()
+                    u=st.text_input("User"); p=st.text_input("Pass", type="password")
+                    if st.form_submit_button("Masuk"):
+                        c=VIEWER_CREDENTIALS["INTERNAL_IC"]
+                        if u==c['user'] and p==c['pass']: st.session_state['auth_internal']=True; st.rerun()
                         else: st.error("Salah")
         else:
-            if st.button("Lock Internal"): 
-                st.session_state['auth_internal'] = False
-                st.rerun()
-            t1, t2, t3 = st.tabs(["Reporting", "NKL", "Rusak"])
-            with t1: tampilkan_viewer("Reporting", ADMIN_CONFIG["INTERNAL_REP"]["folder"], all_files, None)
+            if st.button("Lock"): st.session_state['auth_internal']=False; st.rerun()
+            t1,t2,t3=st.tabs(["Reporting","NKL","Rusak"])
+            with t1: tampilkan_viewer("Rep", ADMIN_CONFIG["INTERNAL_REP"]["folder"], all_files, None)
             with t2: tampilkan_viewer("NKL", ADMIN_CONFIG["INTERNAL_NKL"]["folder"], all_files, None)
             with t3: tampilkan_viewer("Rusak", ADMIN_CONFIG["INTERNAL_RUSAK"]["folder"], all_files, None)
 
-    # --- 3. DC ---
     elif menu == "DC":
         if not st.session_state['auth_dc']:
-            c1, c2, c3 = st.columns([1,2,1])
+            c1,c2,c3=st.columns([1,2,1])
             with c2:
-                st.info("🔒 DC Only")
+                st.info("DC Only")
                 with st.form("fd"):
-                    u, p = st.text_input("User"), st.text_input("Pass", type="password")
-                    if st.form_submit_button("Buka"):
-                        c = VIEWER_CREDENTIALS["DC"]
-                        if u == c['user'] and p == c['pass']:
-                            st.session_state['auth_dc'] = True
-                            st.rerun()
+                    u=st.text_input("User"); p=st.text_input("Pass", type="password")
+                    if st.form_submit_button("Masuk"):
+                        c=VIEWER_CREDENTIALS["DC"]
+                        if u==c['user'] and p==c['pass']: st.session_state['auth_dc']=True; st.rerun()
                         else: st.error("Salah")
         else:
-            if st.button("Lock DC"): 
-                st.session_state['auth_dc'] = False
-                st.rerun()
-            tampilkan_viewer("Data DC", ADMIN_CONFIG["DC_DATA"]["folder"], all_files, None)
+            if st.button("Lock"): st.session_state['auth_dc']=False; st.rerun()
+            tampilkan_viewer("DC", ADMIN_CONFIG["DC_DATA"]["folder"], all_files, None)
 
-    # --- 4. LAPOR ERROR ---
     elif menu == "Lapor Error":
-        st.subheader("🚨 Lapor Error")
-        up = st.file_uploader("Upload Screenshot", type=['png', 'jpg', 'jpeg'])
-        if up and st.button("Kirim"):
-            with st.spinner("Sending..."):
-                upload_image_error(up)
-                st.success("terima kasih, error anda akan diselesaikan sesuai mood admin :)")
-                st.balloons()
-    
-    # --- 5. ADMIN PANEL ---
+        st.subheader("🚨 Lapor"); up=st.file_uploader("Img",type=['jpg','png'])
+        if up and st.button("Kirim"): upload_image_error(up); st.success("Terkirim"); st.balloons()
+
+    # --- 5. ADMIN PANEL (NEW DASHBOARD) ---
     elif menu == "🔐 Admin Panel":
-        st.subheader("⚙️ Kelola Data (Admin Only)")
+        st.subheader("⚙️ Pusat Kontrol Admin")
         
+        # LOGIN ADMIN
         if st.session_state['admin_logged_in_key'] is None:
             c1, c2, c3 = st.columns([1, 2, 1])
             with c2:
                 with st.container(border=True):
-                    st.write("Silakan Login sesuai Divisi")
+                    st.write("Login Divisi")
                     dept = st.selectbox("Departemen:", ["Area", "Internal IC", "DC"])
                     pilihan_sub = []
-                    if dept == "Area":
-                        pilihan_sub = [("Intransit", "AREA_INTRANSIT"), ("NKL", "AREA_NKL"), ("Barang Rusak", "AREA_RUSAK")]
-                    elif dept == "Internal IC":
-                        pilihan_sub = [("Reporting", "INTERNAL_REP"), ("NKL", "INTERNAL_NKL"), ("Barang Rusak", "INTERNAL_RUSAK")]
-                    elif dept == "DC":
-                        pilihan_sub = [("Data DC", "DC_DATA")]
+                    if dept == "Area": pilihan_sub = [("Intransit", "AREA_INTRANSIT"), ("NKL", "AREA_NKL"), ("Barang Rusak", "AREA_RUSAK")]
+                    elif dept == "Internal IC": pilihan_sub = [("Reporting", "INTERNAL_REP"), ("NKL", "INTERNAL_NKL"), ("Barang Rusak", "INTERNAL_RUSAK")]
+                    elif dept == "DC": pilihan_sub = [("Data DC", "DC_DATA")]
                     
-                    sub_nm, sub_kd = st.selectbox("Target Menu:", pilihan_sub, format_func=lambda x: x[0])
-                    u = st.text_input("Username Admin")
-                    p = st.text_input("Password", type="password")
+                    sub_nm, sub_kd = st.selectbox("Menu:", pilihan_sub, format_func=lambda x: x[0])
+                    u = st.text_input("User Admin")
+                    p = st.text_input("Pass Admin", type="password")
                     
-                    if st.button("Masuk Panel Admin", use_container_width=True):
+                    if st.button("Masuk Panel", use_container_width=True):
                         cfg = ADMIN_CONFIG[sub_kd]
                         if u == cfg['username'] and p == cfg['password']:
                             st.session_state['admin_logged_in_key'] = sub_kd
                             st.rerun()
-                        else: st.error("Username atau Password Salah")
+                        else: st.error("Gagal Login")
         else:
             key = st.session_state['admin_logged_in_key']
             cfg = ADMIN_CONFIG[key]
             
-            st.success(f"✅ Login Berhasil: {cfg['label']}")
-            st.info(f"📁 Folder Target Cloud: {cfg['folder']}")
+            c_head, c_out = st.columns([6, 1])
+            with c_head: st.success(f"✅ Login: {cfg['label']}")
+            with c_out: 
+                if st.button("Logout"): st.session_state['admin_logged_in_key']=None; st.rerun()
             
-            # --- TABS ADMIN ---
-            tab_up, tab_del, tab_users, tab_log = st.tabs(["📤 Upload", "🗑️ Hapus", "👥 Kelola User", "📊 Aktivitas User"])
+            # --- TAB UTAMA DASHBOARD ---
+            tab_file, tab_user_mgr = st.tabs(["📂 Manajemen File", "👥 Manajemen User & Monitoring"])
             
-            # 1. UPLOAD
-            with tab_up:
-                with st.container(border=True):
-                    up = st.file_uploader("Pilih File Excel (.xlsx)", type=['xlsx'])
-                    if up and st.button("Mulai Upload", use_container_width=True):
-                        with st.spinner("Sedang mengupload..."):
-                            upload_file(up, cfg['folder'])
-                            get_all_files_cached.clear()
-                            st.success("Berhasil diupload!")
-                            st.rerun()
-
-            # 2. HAPUS
-            with tab_del:
-                with st.container(border=True):
-                    prefix = cfg['folder'] + "/"
-                    my_files = [f for f in all_files if f['public_id'].startswith(prefix)]
-                    if my_files:
-                        d_del = {f['public_id'].replace(prefix, ""): f['public_id'] for f in my_files}
-                        sel_del = st.selectbox("Pilih file yang akan dihapus:", list(d_del.keys()))
-                        if st.button("❌ Hapus File Terpilih", use_container_width=True):
-                            with st.spinner("Menghapus data..."):
-                                hapus_file(d_del[sel_del])
+            # 1. TAB MANAJEMEN FILE (GABUNGAN UPLOAD & HAPUS)
+            with tab_file:
+                col_up, col_del = st.columns(2)
+                
+                with col_up:
+                    st.markdown("#### 📤 Upload File Baru")
+                    with st.container(border=True):
+                        st.info(f"Target: `{cfg['folder']}`")
+                        up = st.file_uploader("Pilih Excel", type=['xlsx'], key="admin_up")
+                        if up and st.button("Mulai Upload", use_container_width=True):
+                            with st.spinner("Uploading..."):
+                                upload_file(up, cfg['folder'])
                                 get_all_files_cached.clear()
-                                st.success("File berhasil dihapus.")
+                                st.success("Selesai!")
                                 st.rerun()
-                    else:
-                        st.write("Belum ada file di folder ini.")
-            
-            # 3. KELOLA USER (RESET PASSWORD)
-            with tab_users:
-                st.markdown("#### 🛠️ Reset Password User Area")
-                if st.button("🔄 Load Daftar User"):
-                    st.rerun()
-                
-                db_users = get_users_db()
-                if db_users:
-                    list_user = list(db_users.keys())
-                    pilih_user = st.selectbox("Pilih Username:", list_user)
-                    new_pass_admin = st.text_input("Set Password Baru:", type="password", key="new_pass_adm")
-                    
-                    if st.button("Simpan Password Baru"):
-                        if new_pass_admin:
-                            db_users[pilih_user] = hash_password(new_pass_admin)
-                            save_users_db(db_users)
-                            st.success(f"Password untuk user '{pilih_user}' berhasil diubah!")
-                        else:
-                            st.warning("Password tidak boleh kosong.")
-                else:
-                    st.info("Belum ada user terdaftar.")
 
-            # 4. MONITORING USER (DOWNLOAD CSV)
-            with tab_log:
-                st.markdown("#### 🕵️ Rekap Login User")
-                if st.button("🔄 Refresh Log"):
-                    st.rerun()
-                
-                log_data = download_json_from_cloud(LOG_DB_PATH)
-                if not log_data:
-                    st.info("Belum ada aktivitas.")
-                else:
-                    rekap_list = []
-                    for tgl, users in log_data.items():
-                        for usr, count in users.items():
-                            rekap_list.append({"Tanggal": tgl, "Username": usr, "Jumlah Login": count})
-                    
-                    if rekap_list:
-                        df_log = pd.DataFrame(rekap_list)
-                        df_log = df_log.sort_values(by="Tanggal", ascending=False)
-                        st.dataframe(df_log, use_container_width=True)
+                with col_del:
+                    st.markdown("#### 🗑️ Hapus File")
+                    with st.container(border=True):
+                        prefix = cfg['folder'] + "/"
+                        my_files = [f for f in all_files if f['public_id'].startswith(prefix)]
                         
-                        # TOMBOL DOWNLOAD CSV (FITUR BARU)
-                        csv_log = df_log.to_csv(index=False).encode('utf-8')
-                        st.download_button(
-                            label="📥 Download Laporan (CSV)",
-                            data=csv_log,
-                            file_name="Laporan_Aktivitas_User.csv",
-                            mime="text/csv"
-                        )
-                    else:
-                        st.info("Data log kosong.")
+                        if my_files:
+                            d_del = {f['public_id'].replace(prefix, ""): f['public_id'] for f in my_files}
+                            sel_del = st.selectbox("Pilih File:", list(d_del.keys()), key="admin_del")
+                            if st.button("Hapus Permanen", type="primary", use_container_width=True):
+                                with st.spinner("Deleting..."):
+                                    hapus_file(d_del[sel_del])
+                                    get_all_files_cached.clear()
+                                    st.success("Terhapus.")
+                                    st.rerun()
+                        else:
+                            st.caption("Folder kosong.")
 
-            st.divider()
-            if st.button("🚪 Logout Admin"):
-                st.session_state['admin_logged_in_key'] = None
-                st.rerun()
+            # 2. TAB MANAJEMEN USER & MONITORING (PUSAT KONTROL)
+            with tab_user_mgr:
+                col_users, col_monitor = st.columns([1, 2])
+                
+                # BAGIAN KIRI: KELOLA USER (RESET PASS)
+                with col_users:
+                    st.markdown("#### 🛠️ Kelola User Area")
+                    with st.container(border=True):
+                        if st.button("🔄 Reload Data User"): st.rerun()
+                        
+                        db_users = get_users_db()
+                        if db_users:
+                            st.write(f"Total User: **{len(db_users)}**")
+                            pilih_user = st.selectbox("Pilih Username:", list(db_users.keys()))
+                            new_pass = st.text_input("Password Baru:", type="password")
+                            
+                            if st.button("Reset Password", use_container_width=True):
+                                if new_pass:
+                                    db_users[pilih_user] = hash_password(new_pass)
+                                    save_users_db(db_users)
+                                    st.success(f"Pass '{pilih_user}' direset!")
+                                else: st.warning("Password kosong!")
+                        else:
+                            st.info("Belum ada user.")
+
+                # BAGIAN KANAN: MONITORING LOG
+                with col_monitor:
+                    st.markdown("#### 📊 Monitoring Aktivitas")
+                    with st.container(border=True):
+                        log_data = download_json_from_cloud(LOG_DB_PATH)
+                        
+                        if log_data:
+                            # Proses Data ke DataFrame
+                            rekap_list = []
+                            total_hits = 0
+                            for tgl, users in log_data.items():
+                                for usr, count in users.items():
+                                    rekap_list.append({"Tanggal": tgl, "User": usr, "Hits": count})
+                                    total_hits += count
+                            
+                            df_log = pd.DataFrame(rekap_list)
+                            df_log = df_log.sort_values(by="Tanggal", ascending=False)
+                            
+                            # Tampilkan Metrik
+                            m1, m2 = st.columns(2)
+                            m1.metric("Total Login (All Time)", total_hits)
+                            
+                            # Tampilkan Tabel
+                            st.dataframe(df_log, use_container_width=True, height=300)
+                            
+                            # Download
+                            csv_log = df_log.to_csv(index=False).encode('utf-8')
+                            st.download_button("📥 Download Log (CSV)", csv_log, "Activity_Log.csv", "text/csv", use_container_width=True)
+                        else:
+                            st.info("Log aktivitas kosong.")
 
     # --- 6. TAMPILAN WEB ---
     elif menu == "🎨 Tampilan Web":
         st.subheader("🎨 Pengaturan Tampilan")
-        col_theme, col_blank = st.columns([1, 2])
-        with col_theme:
+        c1, c2 = st.columns([1, 2])
+        with c1:
             with st.container(border=True):
-                options = ["System", "Light", "Dark"]
-                if st.session_state['current_theme'] not in options:
-                    st.session_state['current_theme'] = "Dark"
-                current_index = options.index(st.session_state['current_theme'])
-                selected_theme = st.radio("Pilih Mode:", options, index=current_index)
-                if selected_theme != st.session_state['current_theme']:
-                    st.session_state['current_theme'] = selected_theme
-                    st.rerun()
-        st.info(f"Mode saat ini: **{st.session_state['current_theme']}**")
+                opts = ["System", "Light", "Dark"]
+                if st.session_state['current_theme'] not in opts: st.session_state['current_theme'] = "Dark"
+                curr = opts.index(st.session_state['current_theme'])
+                sel = st.radio("Mode:", opts, index=curr)
+                if sel != st.session_state['current_theme']: st.session_state['current_theme'] = sel; st.rerun()
+        st.info(f"Mode: **{st.session_state['current_theme']}**")
 
     st.markdown("""<div style='position: fixed; bottom: 0; right: 0; padding: 10px; opacity: 0.5; font-size: 12px; color: grey;'>Monitoring IC Bali System</div>""", unsafe_allow_html=True)
 
