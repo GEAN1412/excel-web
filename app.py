@@ -124,51 +124,27 @@ def hapus_file(public_id):
     except:
         return False
 
-# --- FUNGSI DATABASE (PERBAIKAN LOGIKA CACHE) ---
+# --- FUNGSI DATABASE (SOLUSI FRESH DATA) ---
 
-def get_users_db_fresh():
+def get_json_fresh(public_id):
     """
-    Mengambil Database User dengan memaksa versi terbaru.
-    Ini mengatasi masalah 'delay' setelah register.
+    Mengambil file JSON (User/Log) dengan memaksa Cloudinary memberikan versi terbaru.
+    Menghindari Cache yang membuat data telat update.
     """
     try:
-        # 1. Minta detail resource ke API (bukan search) untuk dapat VERSION
-        # Resource type 'raw' karena json disimpan sebagai raw
-        resource = cloudinary.api.resource(USER_DB_PATH, resource_type="raw")
-        
-        # 2. Ambil Secure URL yang ada version-nya (v12345/...)
-        # Ini memaksa CDN memberikan file terbaru
+        # Minta detail resource via API untuk dapat URL Ber-versi (v1234...)
+        resource = cloudinary.api.resource(public_id, resource_type="raw")
         url = resource.get('secure_url')
         
         if url:
-            # Tambahkan timestamp agar requests python tidak pakai cache lokal
+            # Tambahkan timestamp random agar request HTTP benar-benar baru
             url_no_cache = f"{url}?t={int(time.time())}"
             resp = requests.get(url_no_cache)
-            return resp.json()
+            if resp.status_code == 200:
+                return resp.json()
         return {}
     except:
-        # Jika file belum ada (pertama kali), return dict kosong
-        return {}
-
-def save_users_db(user_dict):
-    """Simpan database user"""
-    json_data = json.dumps(user_dict)
-    cloudinary.uploader.upload(
-        io.BytesIO(json_data.encode('utf-8')), 
-        resource_type="raw", 
-        public_id=USER_DB_PATH,
-        overwrite=True
-    )
-
-def download_json_from_cloud(public_id):
-    # Versi standar untuk log activity (tidak butuh super realtime)
-    try:
-        url, options = cloudinary.utils.cloudinary_url(public_id, resource_type="raw")
-        resp = requests.get(f"{url}?t={int(time.time())}")
-        if resp.status_code == 200:
-            return resp.json()
-        return {}
-    except:
+        # Jika file belum ada
         return {}
 
 def upload_json_to_cloud(data_dict, public_id):
@@ -181,9 +157,13 @@ def upload_json_to_cloud(data_dict, public_id):
     )
 
 def catat_login_activity(username):
+    """Mencatat login dengan aman (Download Fresh -> Update -> Upload)"""
     try:
-        log_data = download_json_from_cloud(LOG_DB_PATH)
-        now = datetime.utcnow() + timedelta(hours=8)
+        # 1. Download Log Paling Baru (Anti-Cache)
+        log_data = get_json_fresh(LOG_DB_PATH)
+        
+        # 2. Update Data
+        now = datetime.utcnow() + timedelta(hours=8) # WITA
         tanggal_str = now.strftime("%Y-%m-%d")
         
         if tanggal_str not in log_data:
@@ -193,6 +173,8 @@ def catat_login_activity(username):
             log_data[tanggal_str][username] = 0
             
         log_data[tanggal_str][username] += 1
+        
+        # 3. Upload Balik
         upload_json_to_cloud(log_data, LOG_DB_PATH)
     except Exception as e:
         print(f"Gagal mencatat log: {e}")
@@ -282,7 +264,6 @@ def proses_tampilkan_excel(url, key_unik):
                             df_display[col] = df_display[col].apply(format_ribuan_indo)
                     except: continue
 
-            # Panel Pengaturan
             st.write("")
             with st.expander("📏 Pengaturan Tampilan Tabel"):
                 col_fz, col_mode, col_h = st.columns(3)
@@ -378,9 +359,9 @@ def main():
                         u = st.text_input("Username")
                         p = st.text_input("Password", type="password")
                         if st.form_submit_button("Masuk"):
-                            # GUNAKAN FUNGSI FRESH AGAR TIDAK KENA CACHE
+                            # PANGGIL FUNGSI FRESH (Anti Cache)
                             with st.spinner("Memverifikasi..."):
-                                db_users = get_users_db_fresh() 
+                                db_users = get_json_fresh(USER_DB_PATH) 
                                 p_hash = hash_password(p)
                                 if u in db_users and db_users[u] == p_hash:
                                     st.session_state['auth_area'] = True
@@ -403,12 +384,12 @@ def main():
                             if new_u and new_p:
                                 with st.spinner("Mendaftarkan..."):
                                     # Ambil DB fresh dulu sebelum nambah
-                                    db_users = get_users_db_fresh()
+                                    db_users = get_json_fresh(USER_DB_PATH)
                                     if new_u in db_users:
                                         st.error("Username sudah dipakai!")
                                     else:
                                         db_users[new_u] = hash_password(new_p)
-                                        save_users_db(db_users)
+                                        upload_json_to_cloud(db_users, USER_DB_PATH)
                                         
                                         # AUTO LOGIN SETELAH DAFTAR (SOLUSI UX)
                                         st.session_state['auth_area'] = True
@@ -561,8 +542,8 @@ def main():
                     st.markdown("#### 🛠️ Kelola User Area")
                     with st.container(border=True):
                         if st.button("🔄 Reload Data User"): st.rerun()
-                        # Panggil DB fresh juga di sini
-                        db_users = get_users_db_fresh()
+                        # Gunakan Fresh DB untuk kelola user
+                        db_users = get_json_fresh(USER_DB_PATH)
                         if db_users:
                             st.write(f"Total User: **{len(db_users)}**")
                             pilih_user = st.selectbox("Pilih Username:", list(db_users.keys()))
@@ -570,7 +551,7 @@ def main():
                             if st.button("Reset Password", use_container_width=True):
                                 if new_pass:
                                     db_users[pilih_user] = hash_password(new_pass)
-                                    save_users_db(db_users)
+                                    upload_json_to_cloud(db_users, USER_DB_PATH)
                                     st.success(f"Pass '{pilih_user}' direset!")
                                 else: st.warning("Password kosong!")
                         else: st.info("Belum ada user.")
@@ -578,21 +559,34 @@ def main():
                 with col_monitor:
                     st.markdown("#### 📊 Monitoring Aktivitas")
                     with st.container(border=True):
-                        log_data = download_json_from_cloud(LOG_DB_PATH)
+                        if st.button("🔄 Refresh Monitoring"): st.rerun()
+                        # Gunakan Fresh Log
+                        log_data = get_json_fresh(LOG_DB_PATH)
+                        
                         if log_data:
                             rekap_list = []
                             total_hits = 0
                             for tgl, users in log_data.items():
                                 for usr, count in users.items():
-                                    rekap_list.append({"Tanggal": tgl, "User": usr, "Hits": count})
+                                    rekap_list.append({"Tanggal": tgl, "Username": usr, "Jumlah Akses": count})
                                     total_hits += count
+                            
                             df_log = pd.DataFrame(rekap_list)
                             df_log = df_log.sort_values(by="Tanggal", ascending=False)
+                            
                             m1, m2 = st.columns(2)
                             m1.metric("Total Login (All Time)", total_hits)
+                            
                             st.dataframe(df_log, use_container_width=True, height=300)
+                            
                             csv_log = df_log.to_csv(index=False).encode('utf-8')
-                            st.download_button("📥 Download Log (CSV)", csv_log, "Activity_Log.csv", "text/csv", use_container_width=True)
+                            st.download_button(
+                                label="📥 Download Log (CSV)", 
+                                data=csv_log, 
+                                file_name="Activity_Log.csv", 
+                                mime="text/csv", 
+                                use_container_width=True
+                            )
                         else: st.info("Log aktivitas kosong.")
 
     # --- 6. TAMPILAN WEB ---
