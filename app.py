@@ -124,20 +124,50 @@ def hapus_file(public_id):
     except:
         return False
 
-# --- FUNGSI DATABASE & LOGGING (FIXED REALTIME) ---
-def download_json_from_cloud(public_id):
-    """Metode Baru: Direct URL Fetching (Lebih Cepat & Akurat)"""
+# --- FUNGSI DATABASE (PERBAIKAN LOGIKA CACHE) ---
+
+def get_users_db_fresh():
+    """
+    Mengambil Database User dengan memaksa versi terbaru.
+    Ini mengatasi masalah 'delay' setelah register.
+    """
     try:
-        # Generate URL langsung (tanpa search API)
-        url, options = cloudinary.utils.cloudinary_url(public_id, resource_type="raw")
-        # Tambahkan random number biar tidak kena cache browser
-        url_no_cache = f"{url}?t={int(time.time())}"
+        # 1. Minta detail resource ke API (bukan search) untuk dapat VERSION
+        # Resource type 'raw' karena json disimpan sebagai raw
+        resource = cloudinary.api.resource(USER_DB_PATH, resource_type="raw")
         
-        resp = requests.get(url_no_cache)
+        # 2. Ambil Secure URL yang ada version-nya (v12345/...)
+        # Ini memaksa CDN memberikan file terbaru
+        url = resource.get('secure_url')
+        
+        if url:
+            # Tambahkan timestamp agar requests python tidak pakai cache lokal
+            url_no_cache = f"{url}?t={int(time.time())}"
+            resp = requests.get(url_no_cache)
+            return resp.json()
+        return {}
+    except:
+        # Jika file belum ada (pertama kali), return dict kosong
+        return {}
+
+def save_users_db(user_dict):
+    """Simpan database user"""
+    json_data = json.dumps(user_dict)
+    cloudinary.uploader.upload(
+        io.BytesIO(json_data.encode('utf-8')), 
+        resource_type="raw", 
+        public_id=USER_DB_PATH,
+        overwrite=True
+    )
+
+def download_json_from_cloud(public_id):
+    # Versi standar untuk log activity (tidak butuh super realtime)
+    try:
+        url, options = cloudinary.utils.cloudinary_url(public_id, resource_type="raw")
+        resp = requests.get(f"{url}?t={int(time.time())}")
         if resp.status_code == 200:
             return resp.json()
-        else:
-            return {} # Jika 404 (File belum ada)
+        return {}
     except:
         return {}
 
@@ -149,12 +179,6 @@ def upload_json_to_cloud(data_dict, public_id):
         public_id=public_id,
         overwrite=True
     )
-
-def get_users_db():
-    return download_json_from_cloud(USER_DB_PATH)
-
-def save_users_db(user_dict):
-    upload_json_to_cloud(user_dict, USER_DB_PATH)
 
 def catat_login_activity(username):
     try:
@@ -354,8 +378,9 @@ def main():
                         u = st.text_input("Username")
                         p = st.text_input("Password", type="password")
                         if st.form_submit_button("Masuk"):
-                            with st.spinner("Mengecek database..."):
-                                db_users = get_users_db() # Sekarang direct, tidak search
+                            # GUNAKAN FUNGSI FRESH AGAR TIDAK KENA CACHE
+                            with st.spinner("Memverifikasi..."):
+                                db_users = get_users_db_fresh() 
                                 p_hash = hash_password(p)
                                 if u in db_users and db_users[u] == p_hash:
                                     st.session_state['auth_area'] = True
@@ -364,7 +389,7 @@ def main():
                                     st.success("Login Berhasil!")
                                     st.rerun()
                                 else:
-                                    st.error("Username atau Password Salah!")
+                                    st.error("Username atau Password Salah (atau data belum update, coba 1 menit lagi)")
                     
                     with st.expander("❓ Lupa Password?"):
                         st.warning("Hubungi Admin Divisi NKL/Reporting.")
@@ -377,14 +402,21 @@ def main():
                         if st.form_submit_button("Daftar"):
                             if new_u and new_p:
                                 with st.spinner("Mendaftarkan..."):
-                                    db_users = get_users_db()
+                                    # Ambil DB fresh dulu sebelum nambah
+                                    db_users = get_users_db_fresh()
                                     if new_u in db_users:
                                         st.error("Username sudah dipakai!")
                                     else:
                                         db_users[new_u] = hash_password(new_p)
                                         save_users_db(db_users)
-                                        time.sleep(2) # Beri jeda 2 detik agar cloud sync
-                                        st.success("Akun dibuat! Silakan Login di tab sebelah.")
+                                        
+                                        # AUTO LOGIN SETELAH DAFTAR (SOLUSI UX)
+                                        st.session_state['auth_area'] = True
+                                        st.session_state['area_user_name'] = new_u
+                                        catat_login_activity(new_u)
+                                        st.success("Akun Berhasil Dibuat & Login Otomatis!")
+                                        time.sleep(1)
+                                        st.rerun()
                             else: st.warning("Isi data dengan lengkap")
         else:
             c_info, c_out = st.columns([5, 1])
@@ -510,6 +542,7 @@ def main():
                     with st.container(border=True):
                         prefix = cfg['folder'] + "/"
                         my_files = [f for f in all_files if f['public_id'].startswith(prefix)]
+                        
                         if my_files:
                             d_del = {f['public_id'].replace(prefix, ""): f['public_id'] for f in my_files}
                             sel_del = st.selectbox("Pilih File:", list(d_del.keys()), key="admin_del")
@@ -528,7 +561,8 @@ def main():
                     st.markdown("#### 🛠️ Kelola User Area")
                     with st.container(border=True):
                         if st.button("🔄 Reload Data User"): st.rerun()
-                        db_users = get_users_db()
+                        # Panggil DB fresh juga di sini
+                        db_users = get_users_db_fresh()
                         if db_users:
                             st.write(f"Total User: **{len(db_users)}**")
                             pilih_user = st.selectbox("Pilih Username:", list(db_users.keys()))
