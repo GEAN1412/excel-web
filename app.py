@@ -6,6 +6,8 @@ import cloudinary.api
 import hashlib
 import requests
 import io
+import json
+from datetime import datetime, timedelta
 
 # --- 1. KONFIGURASI HALAMAN ---
 st.set_page_config(
@@ -14,12 +16,15 @@ st.set_page_config(
     page_icon="🏢"
 )
 
-# --- 2. CSS & TEMA ---
+# --- 2. KONFIGURASI GLOBAL ---
+USER_DB_PATH = "Config/users_area.json"       
+LOG_DB_PATH = "Config/activity_log_area.json" 
+
+# --- 3. CSS & TEMA ---
 def atur_tema():
     if 'current_theme' not in st.session_state:
         st.session_state['current_theme'] = "Dark" 
 
-    # CSS Global
     st.markdown("""
         <style>
             [data-testid="stToolbar"] {visibility: hidden; display: none !important;}
@@ -59,7 +64,7 @@ def atur_tema():
 terapkan_css = atur_tema
 terapkan_css()
 
-# --- 3. CONFIG & DATA ---
+# --- 4. CONFIG DATA ---
 ADMIN_CONFIG = {
     "AREA_INTRANSIT": {"username": "admin_rep", "password": "123456", "folder": "Area/Intransit", "label": "Area - Intransit/Proforma"},
     "AREA_NKL": {"username": "admin_nkl", "password": "123456", "folder": "Area/NKL", "label": "Area - NKL"},
@@ -81,7 +86,7 @@ VIEWER_CREDENTIALS = {
     "DC": {"user": "ic_dc", "pass": "123456"}
 }
 
-# --- 4. SYSTEM FUNCTIONS ---
+# --- 5. SYSTEM FUNCTIONS ---
 def init_cloudinary():
     if "cloudinary" not in st.secrets:
         st.error("⚠️ Kunci Cloudinary belum dipasang!")
@@ -117,20 +122,64 @@ def hapus_file(public_id):
     except:
         return False
 
+# --- FUNGSI DATABASE & LOGGING ---
+def download_json_from_cloud(public_id):
+    try:
+        result = cloudinary.search.expression(f"public_id:{public_id}").execute()
+        if result['resources']:
+            url = result['resources'][0]['secure_url']
+            resp = requests.get(url)
+            return resp.json()
+        return {}
+    except:
+        return {}
+
+def upload_json_to_cloud(data_dict, public_id):
+    json_data = json.dumps(data_dict)
+    cloudinary.uploader.upload(
+        io.BytesIO(json_data.encode('utf-8')), 
+        resource_type="raw", 
+        public_id=public_id,
+        overwrite=True
+    )
+
+def get_users_db():
+    return download_json_from_cloud(USER_DB_PATH)
+
+def save_users_db(user_dict):
+    upload_json_to_cloud(user_dict, USER_DB_PATH)
+
+def catat_login_activity(username):
+    try:
+        log_data = download_json_from_cloud(LOG_DB_PATH)
+        now = datetime.utcnow() + timedelta(hours=8)
+        tanggal_str = now.strftime("%Y-%m-%d")
+        
+        if tanggal_str not in log_data:
+            log_data[tanggal_str] = {}
+        
+        if username not in log_data[tanggal_str]:
+            log_data[tanggal_str][username] = 0
+            
+        log_data[tanggal_str][username] += 1
+        upload_json_to_cloud(log_data, LOG_DB_PATH)
+    except Exception as e:
+        print(f"Gagal mencatat log: {e}")
+
+def hash_password(password):
+    return hashlib.sha256(str.encode(password)).hexdigest()
+
+# --- EXCEL FUNCTIONS ---
 @st.cache_data(ttl=600, show_spinner=False)
 def load_excel_data(url, sheet_name, header_row, force_text=False):
     try:
         response = requests.get(url)
         file_content = io.BytesIO(response.content)
-        # Hitung index row (User input 1 -> Index 0)
         row_idx = header_row - 1 if header_row > 0 else 0
-        
         if force_text:
             df = pd.read_excel(file_content, sheet_name=sheet_name, header=row_idx, dtype=str).fillna("")
         else:
             df = pd.read_excel(file_content, sheet_name=sheet_name, header=row_idx)
-        
-        # Paksa nama kolom jadi string
         df.columns = df.columns.astype(str)
         return df
     except:
@@ -144,7 +193,6 @@ def get_sheet_names(url):
     except:
         return []
 
-# --- 5. FORMATTING FUNCTIONS ---
 def format_ribuan_indo(nilai):
     try:
         if float(nilai) % 1 != 0:
@@ -179,18 +227,15 @@ def proses_tampilkan_excel(url, key_unik):
         fmt = c4.checkbox("Jaga Semua Teks (No HP/NIK)", key=f"fmt_{key_unik}")
         
         with st.spinner("Loading Data..."): 
-            # 1. LOAD DATA RAW (DATA MENTAH)
             df_raw = load_excel_data(url, sh, hd, fmt)
         
         if df_raw is not None:
-            # Filter Search
             if src:
                 try:
                     mask = df_raw.astype(str).apply(lambda x: x.str.contains(src, case=False, na=False)).any(axis=1)
                     df_raw = df_raw[mask]
                 except: pass
 
-            # 2. BUAT DATA TAMPILAN
             df_display = df_raw.copy()
 
             if not fmt:
@@ -206,74 +251,30 @@ def proses_tampilkan_excel(url, key_unik):
                             df_display[col] = df_display[col].apply(format_ribuan_indo)
                     except: continue
 
-            # --- PANEL PENGATURAN TAMPILAN TABEL ---
+            # Panel Pengaturan
             st.write("")
-            with st.expander("📏 Pengaturan Tampilan Tabel (Freeze, Ukuran, & Mode)"):
-                
-                # Layout 3 Kolom
+            with st.expander("📏 Pengaturan Tampilan Tabel"):
                 col_fz, col_mode, col_h = st.columns(3)
-                
-                # 1. Freeze Panel
                 with col_fz:
                     pilihan_kolom = ["Tidak Ada"] + df_display.columns.tolist()
-                    freeze_col = st.selectbox(
-                        "❄️ Freeze Kolom Kiri:", 
-                        pilihan_kolom, 
-                        key=f"fz_{key_unik}",
-                        help="Kolom ini akan menempel di kiri saat discroll."
-                    )
-                
-                # 2. Mode Lebar (Use Container Width)
+                    freeze_col = st.selectbox("❄️ Freeze Kolom Kiri:", pilihan_kolom, key=f"fz_{key_unik}")
                 with col_mode:
-                    st.write("↔️ Mode Lebar Kolom")
-                    use_full_width = st.checkbox(
-                        "Paksa Penuhi Layar (Fit)", 
-                        value=False, # Default False agar scrollable (lebar asli)
-                        key=f"fw_{key_unik}",
-                        help="Centang: Kolom dipaksa muat di layar. Hapus Centang: Kolom lebar alami (Scrollable)."
-                    )
-                
-                # 3. Tinggi Tabel
+                    st.write("↔️ Mode Lebar")
+                    use_full_width = st.checkbox("Fit Screen", value=False, key=f"fw_{key_unik}")
                 with col_h:
-                    table_height = st.slider(
-                        "↕️ Tinggi Tabel (px):", 
-                        min_value=200, 
-                        max_value=1000, 
-                        value=500, 
-                        step=50,
-                        key=f"th_{key_unik}"
-                    )
+                    table_height = st.slider("↕️ Tinggi (px):", 200, 1000, 500, 50, key=f"th_{key_unik}")
             
-            # Logic Freeze
             if freeze_col != "Tidak Ada":
                 df_display = df_display.set_index(freeze_col)
 
-            # TAMPILKAN DATAFRAME
-            # use_container_width=True -> Memaksa semua kolom masuk layar (kecil-kecil)
-            # use_container_width=False -> Kolom sesuai lebar asli (scroll horizontal)
-            st.dataframe(
-                df_display, 
-                use_container_width=use_full_width, 
-                height=table_height
-            )
+            st.dataframe(df_display, use_container_width=use_full_width, height=table_height)
             
-            st.caption("💡 Tips: Anda bisa mengubah lebar kolom secara manual dengan menarik garis pembatas judul kolom.")
-
-            # DOWNLOAD BUTTON
             csv = df_raw.to_csv(index=False).encode('utf-8')
             col_info, col_dl = st.columns([3, 1])
-            with col_info:
-                st.caption(f"Total: {len(df_raw)} Baris")
+            with col_info: st.caption(f"Total: {len(df_raw)} Baris")
             with col_dl:
-                st.download_button(
-                    label="📥 Download CSV (Format Asli)",
-                    data=csv,
-                    file_name=f"Data_Export_{sh}.csv",
-                    mime='text/csv',
-                    key=f"dl_{key_unik}"
-                )
-        else:
-            st.warning("⚠️ Gagal membaca data. Coba ganti angka 'Header'.")
+                st.download_button("📥 Download CSV", csv, f"Data_Export_{sh}.csv", "text/csv", key=f"dl_{key_unik}")
+        else: st.warning("⚠️ Gagal membaca data. Cek Header.")
 
 def tampilkan_viewer(judul_tab, folder_target, semua_files, kode_kontak=None):
     tampilkan_kontak(kode_kontak)
@@ -287,7 +288,6 @@ def tampilkan_viewer(judul_tab, folder_target, semua_files, kode_kontak=None):
     dict_files = {f['public_id'].replace(prefix, ""): f['secure_url'] for f in files_filtered}
     unik = f"std_{folder_target}"
     pilih = st.selectbox(f"Pilih File {judul_tab}:", list(dict_files.keys()), key=f"sel_{unik}")
-    
     if pilih: proses_tampilkan_excel(dict_files[pilih], unik)
 
 def tampilkan_viewer_area_rusak(folder_target, semua_files, kode_kontak=None):
@@ -318,8 +318,11 @@ def tampilkan_viewer_area_rusak(folder_target, semua_files, kode_kontak=None):
 
 # --- MAIN APP ---
 def main():
+    # Session State Init
     if 'auth_internal' not in st.session_state: st.session_state['auth_internal'] = False
     if 'auth_dc' not in st.session_state: st.session_state['auth_dc'] = False
+    if 'auth_area' not in st.session_state: st.session_state['auth_area'] = False
+    if 'area_user_name' not in st.session_state: st.session_state['area_user_name'] = ""
     if 'admin_logged_in_key' not in st.session_state: st.session_state['admin_logged_in_key'] = None
 
     init_cloudinary()
@@ -331,12 +334,64 @@ def main():
     menu = st.radio("Navigasi:", menu_options, horizontal=True)
     st.divider()
 
+    # --- 1. AREA ---
     if menu == "Area":
-        t1, t2, t3 = st.tabs(["Intransit", "NKL", "Barang Rusak"])
-        with t1: tampilkan_viewer("Intransit", ADMIN_CONFIG["AREA_INTRANSIT"]["folder"], all_files, "AREA_INTRANSIT")
-        with t2: tampilkan_viewer("NKL", ADMIN_CONFIG["AREA_NKL"]["folder"], all_files, "AREA_NKL")
-        with t3: tampilkan_viewer_area_rusak(ADMIN_CONFIG["AREA_RUSAK"]["folder"], all_files, "AREA_RUSAK")
+        if not st.session_state['auth_area']:
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                st.info("🔒 Silakan Login untuk akses menu Area")
+                tab_login, tab_daftar = st.tabs(["Masuk (Login)", "Daftar Akun Baru"])
+                
+                with tab_login:
+                    with st.form("login_area"):
+                        u = st.text_input("Username")
+                        p = st.text_input("Password", type="password")
+                        if st.form_submit_button("Masuk"):
+                            db_users = get_users_db()
+                            p_hash = hash_password(p)
+                            if u in db_users and db_users[u] == p_hash:
+                                st.session_state['auth_area'] = True
+                                st.session_state['area_user_name'] = u
+                                catat_login_activity(u) 
+                                st.success("Login Berhasil!")
+                                st.rerun()
+                            else:
+                                st.error("Username atau Password Salah!")
+                    
+                    # FITUR LUPA PASSWORD (User Side)
+                    with st.expander("❓ Lupa Password?"):
+                        st.warning("Silakan hubungi **Admin Divisi NKL/Reporting** untuk mereset password Anda.")
 
+                with tab_daftar:
+                    with st.form("daftar_area"):
+                        st.write("Buat akun baru")
+                        new_u = st.text_input("Username Baru")
+                        new_p = st.text_input("Password Baru", type="password")
+                        if st.form_submit_button("Daftar"):
+                            if new_u and new_p:
+                                with st.spinner("Mendaftarkan..."):
+                                    db_users = get_users_db()
+                                    if new_u in db_users:
+                                        st.error("Username sudah dipakai!")
+                                    else:
+                                        db_users[new_u] = hash_password(new_p)
+                                        save_users_db(db_users)
+                                        st.success("Akun dibuat! Silakan Login.")
+                            else: st.warning("Isi data dengan lengkap")
+        else:
+            c_info, c_out = st.columns([5, 1])
+            with c_info: st.success(f"👋 Halo, {st.session_state['area_user_name']}")
+            with c_out: 
+                if st.button("Logout Area"):
+                    st.session_state['auth_area'] = False
+                    st.rerun()
+            st.divider()
+            t1, t2, t3 = st.tabs(["Intransit", "NKL", "Barang Rusak"])
+            with t1: tampilkan_viewer("Intransit", ADMIN_CONFIG["AREA_INTRANSIT"]["folder"], all_files, "AREA_INTRANSIT")
+            with t2: tampilkan_viewer("NKL", ADMIN_CONFIG["AREA_NKL"]["folder"], all_files, "AREA_NKL")
+            with t3: tampilkan_viewer_area_rusak(ADMIN_CONFIG["AREA_RUSAK"]["folder"], all_files, "AREA_RUSAK")
+
+    # --- 2. INTERNAL IC ---
     elif menu == "Internal IC":
         if not st.session_state['auth_internal']:
             c1, c2, c3 = st.columns([1,2,1])
@@ -359,6 +414,7 @@ def main():
             with t2: tampilkan_viewer("NKL", ADMIN_CONFIG["INTERNAL_NKL"]["folder"], all_files, None)
             with t3: tampilkan_viewer("Rusak", ADMIN_CONFIG["INTERNAL_RUSAK"]["folder"], all_files, None)
 
+    # --- 3. DC ---
     elif menu == "DC":
         if not st.session_state['auth_dc']:
             c1, c2, c3 = st.columns([1,2,1])
@@ -378,6 +434,7 @@ def main():
                 st.rerun()
             tampilkan_viewer("Data DC", ADMIN_CONFIG["DC_DATA"]["folder"], all_files, None)
 
+    # --- 4. LAPOR ERROR ---
     elif menu == "Lapor Error":
         st.subheader("🚨 Lapor Error")
         up = st.file_uploader("Upload Screenshot", type=['png', 'jpg', 'jpeg'])
@@ -387,8 +444,10 @@ def main():
                 st.success("terima kasih, error anda akan diselesaikan sesuai mood admin :)")
                 st.balloons()
     
+    # --- 5. ADMIN PANEL ---
     elif menu == "🔐 Admin Panel":
         st.subheader("⚙️ Kelola Data (Admin Only)")
+        
         if st.session_state['admin_logged_in_key'] is None:
             c1, c2, c3 = st.columns([1, 2, 1])
             with c2:
@@ -416,22 +475,26 @@ def main():
         else:
             key = st.session_state['admin_logged_in_key']
             cfg = ADMIN_CONFIG[key]
+            
             st.success(f"✅ Login Berhasil: {cfg['label']}")
             st.info(f"📁 Folder Target Cloud: {cfg['folder']}")
             
-            c_up, c_del = st.columns(2)
-            with c_up:
-                st.markdown("#### 📤 Upload File Baru")
+            # --- TABS ADMIN ---
+            tab_up, tab_del, tab_users, tab_log = st.tabs(["📤 Upload", "🗑️ Hapus", "👥 Kelola User", "📊 Aktivitas User"])
+            
+            # 1. UPLOAD
+            with tab_up:
                 with st.container(border=True):
                     up = st.file_uploader("Pilih File Excel (.xlsx)", type=['xlsx'])
                     if up and st.button("Mulai Upload", use_container_width=True):
-                        with st.spinner("Sedang mengupload ke server..."):
+                        with st.spinner("Sedang mengupload..."):
                             upload_file(up, cfg['folder'])
                             get_all_files_cached.clear()
                             st.success("Berhasil diupload!")
                             st.rerun()
-            with c_del:
-                st.markdown("#### 🗑️ Hapus File Lama")
+
+            # 2. HAPUS
+            with tab_del:
                 with st.container(border=True):
                     prefix = cfg['folder'] + "/"
                     my_files = [f for f in all_files if f['public_id'].startswith(prefix)]
@@ -446,14 +509,68 @@ def main():
                                 st.rerun()
                     else:
                         st.write("Belum ada file di folder ini.")
+            
+            # 3. KELOLA USER (RESET PASSWORD)
+            with tab_users:
+                st.markdown("#### 🛠️ Reset Password User Area")
+                if st.button("🔄 Load Daftar User"):
+                    st.rerun()
+                
+                db_users = get_users_db()
+                if db_users:
+                    list_user = list(db_users.keys())
+                    pilih_user = st.selectbox("Pilih Username:", list_user)
+                    new_pass_admin = st.text_input("Set Password Baru:", type="password", key="new_pass_adm")
+                    
+                    if st.button("Simpan Password Baru"):
+                        if new_pass_admin:
+                            db_users[pilih_user] = hash_password(new_pass_admin)
+                            save_users_db(db_users)
+                            st.success(f"Password untuk user '{pilih_user}' berhasil diubah!")
+                        else:
+                            st.warning("Password tidak boleh kosong.")
+                else:
+                    st.info("Belum ada user terdaftar.")
+
+            # 4. MONITORING USER (DOWNLOAD CSV)
+            with tab_log:
+                st.markdown("#### 🕵️ Rekap Login User")
+                if st.button("🔄 Refresh Log"):
+                    st.rerun()
+                
+                log_data = download_json_from_cloud(LOG_DB_PATH)
+                if not log_data:
+                    st.info("Belum ada aktivitas.")
+                else:
+                    rekap_list = []
+                    for tgl, users in log_data.items():
+                        for usr, count in users.items():
+                            rekap_list.append({"Tanggal": tgl, "Username": usr, "Jumlah Login": count})
+                    
+                    if rekap_list:
+                        df_log = pd.DataFrame(rekap_list)
+                        df_log = df_log.sort_values(by="Tanggal", ascending=False)
+                        st.dataframe(df_log, use_container_width=True)
+                        
+                        # TOMBOL DOWNLOAD CSV (FITUR BARU)
+                        csv_log = df_log.to_csv(index=False).encode('utf-8')
+                        st.download_button(
+                            label="📥 Download Laporan (CSV)",
+                            data=csv_log,
+                            file_name="Laporan_Aktivitas_User.csv",
+                            mime="text/csv"
+                        )
+                    else:
+                        st.info("Data log kosong.")
+
             st.divider()
             if st.button("🚪 Logout Admin"):
                 st.session_state['admin_logged_in_key'] = None
                 st.rerun()
 
+    # --- 6. TAMPILAN WEB ---
     elif menu == "🎨 Tampilan Web":
         st.subheader("🎨 Pengaturan Tampilan")
-        st.write("Pilih mode tampilan yang nyaman untuk mata Anda.")
         col_theme, col_blank = st.columns([1, 2])
         with col_theme:
             with st.container(border=True):
