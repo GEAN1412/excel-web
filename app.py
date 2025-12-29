@@ -19,6 +19,7 @@ def atur_tema():
     if 'current_theme' not in st.session_state:
         st.session_state['current_theme'] = "Dark" 
 
+    # CSS Global
     st.markdown("""
         <style>
             [data-testid="stToolbar"] {visibility: hidden; display: none !important;}
@@ -173,18 +174,25 @@ def proses_tampilkan_excel(url, key_unik):
         c1, c2 = st.columns(2)
         sh = c1.selectbox("Sheet:", sheets, key=f"sh_{key_unik}")
         hd = c2.number_input("Header:", 1, key=f"hd_{key_unik}")
-        
-        # Opsi Format Text
-        fmt = st.checkbox("Jaga Semua Teks (No HP/NIK)", key=f"fmt_{key_unik}")
+        c3, c4 = st.columns([2, 1])
+        src = c3.text_input("Cari:", key=f"src_{key_unik}")
+        fmt = c4.checkbox("Jaga Semua Teks (No HP/NIK)", key=f"fmt_{key_unik}")
         
         with st.spinner("Loading Data..."): 
+            # 1. LOAD DATA RAW (DATA MENTAH)
             df_raw = load_excel_data(url, sh, hd, fmt)
         
         if df_raw is not None:
-            # COPY untuk tampilan
+            # Filter Search
+            if src:
+                try:
+                    mask = df_raw.astype(str).apply(lambda x: x.str.contains(src, case=False, na=False)).any(axis=1)
+                    df_raw = df_raw[mask]
+                except: pass
+
+            # 2. BUAT DATA TAMPILAN
             df_display = df_raw.copy()
 
-            # --- LOGIKA FORMATTING TAMPILAN (SEBELUM FILTER) ---
             if not fmt:
                 num_cols = df_display.select_dtypes(include=['float64', 'int64']).columns.tolist()
                 kw_raw_code = ['prdcd', 'plu', 'barcode', 'kode', 'id', 'nik', 'no', 'nomor']
@@ -198,67 +206,67 @@ def proses_tampilkan_excel(url, key_unik):
                             df_display[col] = df_display[col].apply(format_ribuan_indo)
                     except: continue
 
-            # --- FITUR BARU: ADVANCED FILTERING (MULTI KONDISI) ---
-            st.divider()
+            # --- PANEL PENGATURAN TAMPILAN TABEL ---
+            st.write("")
+            with st.expander("📏 Pengaturan Tampilan Tabel (Freeze, Ukuran, & Mode)"):
+                
+                # Layout 3 Kolom
+                col_fz, col_mode, col_h = st.columns(3)
+                
+                # 1. Freeze Panel
+                with col_fz:
+                    pilihan_kolom = ["Tidak Ada"] + df_display.columns.tolist()
+                    freeze_col = st.selectbox(
+                        "❄️ Freeze Kolom Kiri:", 
+                        pilihan_kolom, 
+                        key=f"fz_{key_unik}",
+                        help="Kolom ini akan menempel di kiri saat discroll."
+                    )
+                
+                # 2. Mode Lebar (Use Container Width)
+                with col_mode:
+                    st.write("↔️ Mode Lebar Kolom")
+                    use_full_width = st.checkbox(
+                        "Paksa Penuhi Layar (Fit)", 
+                        value=False, # Default False agar scrollable (lebar asli)
+                        key=f"fw_{key_unik}",
+                        help="Centang: Kolom dipaksa muat di layar. Hapus Centang: Kolom lebar alami (Scrollable)."
+                    )
+                
+                # 3. Tinggi Tabel
+                with col_h:
+                    table_height = st.slider(
+                        "↕️ Tinggi Tabel (px):", 
+                        min_value=200, 
+                        max_value=1000, 
+                        value=500, 
+                        step=50,
+                        key=f"th_{key_unik}"
+                    )
             
-            # Layout Filter: Global Search Kiri, Advanced Kanan
-            col_search, col_adv = st.columns([1, 2])
-            
-            with col_search:
-                src = st.text_input("🔍 Cari Cepat (Semua Kolom):", key=f"src_{key_unik}")
-            
-            # Container Filter Lanjutan
-            with col_adv:
-                with st.expander("📂 Filter Multi-Kolom (Klik disini)"):
-                    # Pilih kolom apa saja yang mau difilter
-                    filter_cols = st.multiselect("Pilih Kolom untuk difilter:", df_display.columns, key=f"mc_{key_unik}")
-                    
-                    filters = {}
-                    if filter_cols:
-                        cols_ui = st.columns(len(filter_cols))
-                        for idx, col in enumerate(filter_cols):
-                            # Buat input text untuk setiap kolom yang dipilih
-                            with cols_ui[idx]:
-                                val = st.text_input(f"Isi {col}:", key=f"f_{col}_{key_unik}")
-                                if val:
-                                    filters[col] = val
+            # Logic Freeze
+            if freeze_col != "Tidak Ada":
+                df_display = df_display.set_index(freeze_col)
 
-            # --- PENERAPAN FILTER ---
+            # TAMPILKAN DATAFRAME
+            # use_container_width=True -> Memaksa semua kolom masuk layar (kecil-kecil)
+            # use_container_width=False -> Kolom sesuai lebar asli (scroll horizontal)
+            st.dataframe(
+                df_display, 
+                use_container_width=use_full_width, 
+                height=table_height
+            )
             
-            # 1. Filter Global Search
-            if src:
-                try:
-                    mask_src = df_display.astype(str).apply(lambda x: x.str.contains(src, case=False, na=False)).any(axis=1)
-                    df_display = df_display[mask_src]
-                except: pass
+            st.caption("💡 Tips: Anda bisa mengubah lebar kolom secara manual dengan menarik garis pembatas judul kolom.")
 
-            # 2. Filter Multi-Kolom
-            if filters:
-                for col_name, search_val in filters.items():
-                    try:
-                        # Filter pada df_display (yang sudah diformat) agar user mencari apa yang mereka lihat
-                        df_display = df_display[df_display[col_name].astype(str).str.contains(search_val, case=False, na=False)]
-                    except: pass
-
-            # --- SINKRONISASI DATA RAW UNTUK DOWNLOAD ---
-            # Kita ambil index dari df_display yang sudah terfilter
-            # Lalu kita ambil baris yang sama dari df_raw (data asli)
-            try:
-                df_download = df_raw.loc[df_display.index]
-            except:
-                df_download = df_raw # Fallback jika error index
-
-            # TAMPILKAN
-            st.dataframe(df_display, use_container_width=True, height=500)
-            
-            # DOWNLOAD
-            csv = df_download.to_csv(index=False).encode('utf-8')
+            # DOWNLOAD BUTTON
+            csv = df_raw.to_csv(index=False).encode('utf-8')
             col_info, col_dl = st.columns([3, 1])
             with col_info:
-                st.caption(f"Total: {len(df_display)} Baris (Tefilter)")
+                st.caption(f"Total: {len(df_raw)} Baris")
             with col_dl:
                 st.download_button(
-                    label="📥 Download CSV (Hasil Filter)",
+                    label="📥 Download CSV (Format Asli)",
                     data=csv,
                     file_name=f"Data_Export_{sh}.csv",
                     mime='text/csv',
