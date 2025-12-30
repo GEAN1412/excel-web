@@ -88,6 +88,7 @@ VIEWER_CREDENTIALS = {
     "DC": {"user": "ic_dc", "pass": "123456"}
 }
 
+
 # --- 5. SYSTEM FUNCTIONS ---
 def init_cloudinary():
     if "cloudinary" not in st.secrets:
@@ -387,12 +388,11 @@ def main():
                                         db_users[new_u] = hash_password(new_p)
                                         upload_json_to_cloud(db_users, USER_DB_PATH)
                                         
-                                        st.session_state['auth_area'] = True
-                                        st.session_state['area_user_name'] = new_u
-                                        catat_login_activity(new_u)
-                                        st.success("Akun Berhasil Dibuat & Login Otomatis!")
-                                        time.sleep(1)
-                                        st.rerun()
+                                        # BERI WAKTU AGAR CLOUD SINKRON
+                                        time.sleep(2)
+                                        st.success(f"✅ Akun '{new_u}' Berhasil Dibuat!")
+                                        st.info("Silakan pindah ke Tab 'Masuk' dan Login menggunakan password yang baru dibuat.")
+                                        
                             else: st.warning("Isi data dengan lengkap")
         else:
             c_info, c_out = st.columns([5, 1])
