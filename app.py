@@ -24,12 +24,9 @@ LOG_DB_PATH = "Config/activity_log_area.json"
 
 # --- 3. CSS & TEMA ---
 def atur_tema():
-    # SET DEFAULT KE 'SYSTEM' (Mengikuti Perangkat)
     if 'current_theme' not in st.session_state:
-        st.session_state['current_theme'] = "System" 
+        st.session_state['current_theme'] = "Dark" 
 
-    # 1. CSS GLOBAL (STRUKTUR) - SELALU DITERAPKAN DI SEMUA MODE
-    # Ini untuk menyembunyikan toolbar, footer, dan dekorasi agar bersih
     st.markdown("""
         <style>
             [data-testid="stToolbar"] {visibility: hidden; display: none !important;}
@@ -42,7 +39,6 @@ def atur_tema():
 
     tema = st.session_state['current_theme']
     
-    # 2. CSS WARNA (HANYA JIKA DIPAKSA DARK/LIGHT)
     if tema == "Dark":
         st.markdown("""
         <style>
@@ -59,7 +55,6 @@ def atur_tema():
             .stDataFrame { filter: invert(0); }
         </style>
         """, unsafe_allow_html=True)
-        
     elif tema == "Light":
         st.markdown("""
         <style>
@@ -67,9 +62,6 @@ def atur_tema():
             h1, h2, h3, h4, h5, h6, p, span, div, label, .stMarkdown {color: #000000 !important;}
         </style>
         """, unsafe_allow_html=True)
-    
-    # JIKA "SYSTEM", KITA TIDAK INJECT CSS WARNA.
-    # Biarkan Streamlit mengikuti pengaturan browser/HP pengguna secara otomatis.
 
 terapkan_css = atur_tema
 terapkan_css()
@@ -95,7 +87,6 @@ VIEWER_CREDENTIALS = {
     "INTERNAL_IC": {"user": "ic_bli", "pass": "123456"},
     "DC": {"user": "ic_dc", "pass": "123456"}
 }
-
 
 # --- 5. SYSTEM FUNCTIONS ---
 def init_cloudinary():
@@ -133,7 +124,7 @@ def hapus_file(public_id):
     except:
         return False
 
-# --- FUNGSI DATABASE ---
+# --- FUNGSI DATABASE (REALTIME) ---
 def get_json_fresh(public_id):
     try:
         resource = cloudinary.api.resource(public_id, resource_type="raw")
@@ -296,6 +287,7 @@ def tampilkan_viewer(judul_tab, folder_target, semua_files, kode_kontak=None):
     pilih = st.selectbox(f"Pilih File {judul_tab}:", list(dict_files.keys()), key=f"sel_{unik}")
     if pilih: proses_tampilkan_excel(dict_files[pilih], unik)
 
+# --- VIEWER SPESIAL (BARANG RUSAK) ---
 def tampilkan_viewer_area_rusak(folder_target, semua_files, kode_kontak=None):
     tampilkan_kontak(kode_kontak)
     st.markdown("### ⚠️ Area - Barang Rusak")
@@ -319,6 +311,58 @@ def tampilkan_viewer_area_rusak(folder_target, semua_files, kode_kontak=None):
 
     dict_files = {f['public_id'].replace(prefix, ""): f['secure_url'] for f in ff}
     unik = "area_rusak_special"
+    pilih = st.selectbox(f"Pilih File ({kat}):", list(dict_files.keys()), key=f"sel_{unik}")
+    if pilih: proses_tampilkan_excel(dict_files[pilih], unik)
+
+# --- VIEWER SPESIAL (INTRANSIT / PROFORMA) ---
+def tampilkan_viewer_area_intransit(folder_target, semua_files, kode_kontak=None):
+    tampilkan_kontak(kode_kontak)
+    st.markdown("### 🚛 Area - Intransit/Proforma")
+    
+    # FILTER BARU
+    kat = st.radio("Filter Kategori:", ["Semua Data", "NRB Intransit", "BPB/TAT Intransit"], horizontal=True)
+    
+    # RUNNING TEXT SESUAI PILIHAN
+    if kat == "NRB Intransit":
+        st.markdown("""
+        <div style="background-color: #550000; padding: 10px; border-radius: 5px; margin-bottom: 10px; border: 1px solid red;">
+            <marquee style="color: #ffcccc; font-weight: bold; font-size: 16px;">
+                📢 JIKA NRB TELAH DIKIRIM KE DC/DEPO, TOLONG KONFIRMASI KE YANI IC
+            </marquee>
+        </div>
+        """, unsafe_allow_html=True)
+        
+    elif kat == "BPB/TAT Intransit":
+        st.markdown("""
+        <div style="background-color: #004400; padding: 10px; border-radius: 5px; margin-bottom: 10px; border: 1px solid green;">
+            <marquee style="color: #ccffcc; font-weight: bold; font-size: 16px;">
+                📢 JIKA BPB DAN TAT TELAH DIPROSES DAN FISIK DITERIMA TOKO, TOLONG KONFIRMASI KE TULASI IC
+            </marquee>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.divider()
+
+    prefix = folder_target + "/"
+    files_in = [f for f in semua_files if f['public_id'].startswith(prefix) and f['public_id'].endswith('.xlsx')]
+    
+    # LOGIKA PENYARINGAN FILE
+    if kat == "Semua Data": 
+        ff = files_in
+    elif kat == "NRB Intransit": 
+        ff = [f for f in files_in if "nrb" in f['public_id'].lower()]
+    elif kat == "BPB/TAT Intransit": 
+        # Cari yang mengandung kata BPB atau TAT
+        ff = [f for f in files_in if "bpb" in f['public_id'].lower() or "tat" in f['public_id'].lower()]
+    else: 
+        ff = []
+
+    if not ff:
+        st.warning(f"File kategori '{kat}' tidak ditemukan.")
+        return
+
+    dict_files = {f['public_id'].replace(prefix, ""): f['secure_url'] for f in ff}
+    unik = "area_intransit_special"
     pilih = st.selectbox(f"Pilih File ({kat}):", list(dict_files.keys()), key=f"sel_{unik}")
     if pilih: proses_tampilkan_excel(dict_files[pilih], unik)
 
@@ -410,7 +454,10 @@ def main():
                     st.rerun()
             st.divider()
             t1, t2, t3 = st.tabs(["Intransit", "NKL", "Barang Rusak"])
-            with t1: tampilkan_viewer("Intransit", ADMIN_CONFIG["AREA_INTRANSIT"]["folder"], all_files, "AREA_INTRANSIT")
+            
+            # --- PANGGIL FUNGSI VIEWER SPESIAL (INTRANSIT) DI SINI ---
+            with t1: tampilkan_viewer_area_intransit(ADMIN_CONFIG["AREA_INTRANSIT"]["folder"], all_files, "AREA_INTRANSIT")
+            
             with t2: tampilkan_viewer("NKL", ADMIN_CONFIG["AREA_NKL"]["folder"], all_files, "AREA_NKL")
             with t3: tampilkan_viewer_area_rusak(ADMIN_CONFIG["AREA_RUSAK"]["folder"], all_files, "AREA_RUSAK")
 
@@ -566,6 +613,7 @@ def main():
                             
                             st.markdown("---")
                             st.caption("Hapus User:")
+                            # FITUR BARU: HAPUS USER
                             if st.button("❌ Hapus User Ini", type="primary", use_container_width=True):
                                 try:
                                     del db_users[pilih_user]
@@ -618,15 +666,8 @@ def main():
         with c1:
             with st.container(border=True):
                 opts = ["System", "Light", "Dark"]
-                if st.session_state['current_theme'] not in opts: st.session_state['current_theme'] = "System"
-                
-                # Check agar index tidak error
-                try:
-                    curr = opts.index(st.session_state['current_theme'])
-                except:
-                    st.session_state['current_theme'] = "System"
-                    curr = 0
-                    
+                if st.session_state['current_theme'] not in opts: st.session_state['current_theme'] = "Dark"
+                curr = opts.index(st.session_state['current_theme'])
                 sel = st.radio("Mode:", opts, index=curr)
                 if sel != st.session_state['current_theme']: st.session_state['current_theme'] = sel; st.rerun()
         st.info(f"Mode: **{st.session_state['current_theme']}**")
