@@ -20,16 +20,16 @@ st.set_page_config(
 
 # --- 2. KONFIGURASI GLOBAL ---
 USER_DB_PATH = "Config/users_area.json"       
-LOG_DB_PATH = "Config/activity_log_area.json" 
+LOG_DB_PATH = "Config/activity_log_area.json"
+RUSAK_PABRIK_DB = "Config/data_rusak_pabrik.json" 
+RUSAK_PABRIK_IMG_FOLDER = "Area/RusakPabrik/Foto"
+DOKUMENTASI_FOLDER = "Dokumentasi/Foto"
 
-# --- 3. CSS & TEMA (DEFAULT SYSTEM) ---
+# --- 3. CSS & TEMA ---
 def atur_tema():
-    # SET DEFAULT KE 'SYSTEM' (Mengikuti Perangkat)
     if 'current_theme' not in st.session_state:
         st.session_state['current_theme'] = "System" 
 
-    # 1. CSS GLOBAL (STRUKTUR) - SELALU DITERAPKAN DI SEMUA MODE
-    # Ini untuk menyembunyikan toolbar, footer, dan dekorasi agar bersih
     st.markdown("""
         <style>
             [data-testid="stToolbar"] {visibility: hidden; display: none !important;}
@@ -41,9 +41,6 @@ def atur_tema():
     """, unsafe_allow_html=True)
 
     tema = st.session_state['current_theme']
-    
-    # 2. CSS WARNA (HANYA JIKA DIPAKSA DARK/LIGHT)
-    # Jika "System", kita biarkan Streamlit mengatur warnanya sendiri
     
     if tema == "Dark":
         st.markdown("""
@@ -61,7 +58,6 @@ def atur_tema():
             .stDataFrame { filter: invert(0); }
         </style>
         """, unsafe_allow_html=True)
-        
     elif tema == "Light":
         st.markdown("""
         <style>
@@ -75,13 +71,14 @@ terapkan_css()
 
 # --- 4. CONFIG DATA ---
 ADMIN_CONFIG = {
-    "AREA_INTRANSIT": {"username": "admin_rep", "password": "123456", "folder": "Area/Intransit", "label": "Area - Intransit/Proforma"},
-    "AREA_NKL": {"username": "admin_nkl", "password": "123456", "folder": "Area/NKL", "label": "Area - NKL"},
-    "AREA_RUSAK": {"username": "admin_rusak", "password": "123456", "folder": "Area/BarangRusak", "label": "Area - Barang Rusak"},
-    "INTERNAL_REP": {"username": "admin_rep", "password": "123456", "folder": "InternalIC/Reporting", "label": "Internal IC - Reporting"},
-    "INTERNAL_NKL": {"username": "admin_nkl", "password": "123456", "folder": "InternalIC/NKL", "label": "Internal IC - NKL"},
-    "INTERNAL_RUSAK": {"username": "admin_rusak", "password": "123456", "folder": "InternalIC/BarangRusak", "label": "Internal IC - Barang Rusak"},
-    "DC_DATA": {"username": "admin_dc", "password": "123456", "folder": "DC/General", "label": "DC - Data Utama"}
+    "AREA_INTRANSIT": {"username": "admin_area_prof", "password": "123", "folder": "Area/Intransit", "label": "Area - Intransit/Proforma"},
+    "AREA_NKL": {"username": "admin_area_nkl", "password": "123", "folder": "Area/NKL", "label": "Area - NKL"},
+    "AREA_RUSAK": {"username": "admin_area_rusak", "password": "123", "folder": "Area/BarangRusak", "label": "Area - Barang Rusak"},
+    "INTERNAL_REP": {"username": "admin_ic_rep", "password": "123", "folder": "InternalIC/Reporting", "label": "Internal IC - Reporting"},
+    "INTERNAL_NKL": {"username": "admin_ic_nkl", "password": "123", "folder": "InternalIC/NKL", "label": "Internal IC - NKL"},
+    "INTERNAL_RUSAK": {"username": "admin_ic_rusak", "password": "123", "folder": "InternalIC/BarangRusak", "label": "Internal IC - Barang Rusak"},
+    "DC_DATA": {"username": "admin_dc", "password": "123", "folder": "DC/General", "label": "DC - Data Utama"},
+    "DOKUMENTASI": {"username": "admin_foto", "password": "123", "folder": DOKUMENTASI_FOLDER, "label": "Admin Dokumentasi"}
 }
 
 DATA_CONTACT = {
@@ -92,7 +89,7 @@ DATA_CONTACT = {
 
 VIEWER_CREDENTIALS = {
     "INTERNAL_IC": {"user": "ic_bli", "pass": "123456"},
-    "DC": {"user": "ic_dc", "pass": "123456"}
+    "DC": {"user": "IC_DC", "pass": "123456"}
 }
 
 # --- 5. SYSTEM FUNCTIONS ---
@@ -111,7 +108,10 @@ def init_cloudinary():
 def get_all_files_cached():
     try:
         raw = cloudinary.api.resources(resource_type="raw", type="upload", max_results=500)
-        return raw.get('resources', [])
+        files_raw = raw.get('resources', [])
+        img = cloudinary.api.resources(resource_type="image", type="upload", prefix=DOKUMENTASI_FOLDER, max_results=500)
+        files_img = img.get('resources', [])
+        return files_raw + files_img
     except:
         return []
 
@@ -120,13 +120,18 @@ def upload_file(file_upload, folder_path):
     res = cloudinary.uploader.upload(file_upload, resource_type="raw", public_id=public_id_path, overwrite=True)
     return res
 
+def upload_photo_to_cloud(image_file, folder_path):
+    public_id_path = f"{folder_path}/{image_file.name.split('.')[0]}"
+    res = cloudinary.uploader.upload(image_file, resource_type="image", public_id=public_id_path, overwrite=True)
+    return res
+
 def upload_image_error(image_file):
     res = cloudinary.uploader.upload(image_file, folder="ReportError", resource_type="image")
     return res
 
-def hapus_file(public_id):
+def hapus_file(public_id, res_type="raw"):
     try:
-        cloudinary.api.delete_resources([public_id], resource_type="raw", type="upload")
+        cloudinary.api.delete_resources([public_id], resource_type=res_type, type="upload")
         return True
     except:
         return False
@@ -145,8 +150,8 @@ def get_json_fresh(public_id):
     except:
         return {}
 
-def upload_json_to_cloud(data_dict, public_id):
-    json_data = json.dumps(data_dict)
+def upload_json_to_cloud(data_obj, public_id):
+    json_data = json.dumps(data_obj)
     cloudinary.uploader.upload(
         io.BytesIO(json_data.encode('utf-8')), 
         resource_type="raw", 
@@ -159,20 +164,81 @@ def catat_login_activity(username):
         log_data = get_json_fresh(LOG_DB_PATH)
         now = datetime.utcnow() + timedelta(hours=8)
         tanggal_str = now.strftime("%Y-%m-%d")
-        
-        if tanggal_str not in log_data:
-            log_data[tanggal_str] = {}
-        
-        if username not in log_data[tanggal_str]:
-            log_data[tanggal_str][username] = 0
-            
+        if tanggal_str not in log_data: log_data[tanggal_str] = {}
+        if username not in log_data[tanggal_str]: log_data[tanggal_str][username] = 0
         log_data[tanggal_str][username] += 1
         upload_json_to_cloud(log_data, LOG_DB_PATH)
-    except Exception as e:
-        print(f"Gagal mencatat log: {e}")
+    except Exception as e: print(f"Log Error: {e}")
 
 def hash_password(password):
     return hashlib.sha256(str.encode(password)).hexdigest()
+
+# --- FUNGSI KHUSUS RUSAK PABRIK (UPLOAD & DELETE BULANAN) ---
+def simpan_data_rusak_pabrik(kode_toko, no_nrb, tgl_nrb, file_foto):
+    try:
+        if file_foto.size > 1 * 1024 * 1024:
+            return False, "⚠️ Gagal: Ukuran foto melebihi 1 MB. Silakan Screenshot dulu atau kompres."
+
+        kode_clean = kode_toko.upper().replace(" ", "")
+        nrb_clean = no_nrb.upper().replace(" ", "")
+        tgl_str = tgl_nrb.strftime("%d%m%Y")
+        
+        folder_bulan = datetime.now().strftime("%Y-%m")
+        nama_file_unik = f"{kode_clean}_{nrb_clean}_{tgl_str}"
+        public_id = f"{RUSAK_PABRIK_IMG_FOLDER}/{folder_bulan}/{nama_file_unik}"
+        
+        res = cloudinary.uploader.upload(
+            file_foto, 
+            resource_type="image", 
+            public_id=public_id,
+            overwrite=True,
+            transformation=[{'width': 800, 'crop': "limit"}, {'quality': "auto:eco"}, {'fetch_format': "auto"}]
+        )
+        url_foto = res.get('secure_url')
+
+        data_lama = get_json_fresh(RUSAK_PABRIK_DB)
+        if isinstance(data_lama, dict) and not data_lama: data_lama = [] 
+        
+        entry_baru = {
+            "Input_Time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "Bulan_Upload": folder_bulan, 
+            "Kode_Toko": kode_clean,
+            "No_NRB": nrb_clean,
+            "Tanggal_NRB": str(tgl_nrb),
+            "Bukti_Foto": url_foto,
+            "User_Input": st.session_state.get('area_user_name', 'Unknown')
+        }
+        
+        data_lama.append(entry_baru)
+        upload_json_to_cloud(data_lama, RUSAK_PABRIK_DB)
+        return True, "✅ Data & Foto Berhasil Disimpan!"
+    except Exception as e: return False, f"Error System: {e}"
+
+def hapus_data_bulan_tertentu(bulan_target):
+    """Menghapus semua foto dalam folder bulan tertentu dan update database JSON"""
+    try:
+        # 1. Hapus Resources di Cloudinary (Prefix: Area/RusakPabrik/Foto/2026-01/)
+        prefix_folder = f"{RUSAK_PABRIK_IMG_FOLDER}/{bulan_target}/"
+        
+        # Hapus semua gambar di prefix tersebut
+        cloudinary.api.delete_resources_by_prefix(prefix_folder, resource_type="image")
+        
+        # Hapus foldernya (Cloudinary virtual folder, kadang perlu ini agar bersih)
+        try:
+            cloudinary.api.delete_folder(prefix_folder)
+        except: pass # Abaikan jika folder sudah hilang otomatis
+
+        # 2. Update Database JSON (Hapus entry yang bulannya sama)
+        data_lama = get_json_fresh(RUSAK_PABRIK_DB)
+        if isinstance(data_lama, list):
+            # Filter data: Ambil yang bulannya TIDAK sama dengan target
+            data_baru = [d for d in data_lama if d.get('Bulan_Upload') != bulan_target]
+            
+            upload_json_to_cloud(data_baru, RUSAK_PABRIK_DB)
+            
+        return True, f"Semua data bulan {bulan_target} berhasil dihapus permanen."
+    except Exception as e:
+        return False, f"Gagal menghapus: {e}"
 
 # --- EXCEL FUNCTIONS ---
 @st.cache_data(ttl=600, show_spinner=False)
@@ -297,58 +363,108 @@ def tampilkan_viewer(judul_tab, folder_target, semua_files, kode_kontak=None):
 def tampilkan_viewer_area_rusak(folder_target, semua_files, kode_kontak=None):
     tampilkan_kontak(kode_kontak)
     st.markdown("### ⚠️ Area - Barang Rusak")
-    kat = st.radio("Filter:", ["Semua Data", "Say Bread", "Mr Bread", "Fried Chicken", "Onigiri", "DRY"], horizontal=True)
-    st.divider()
-
-    prefix = folder_target + "/"
-    files_in = [f for f in semua_files if f['public_id'].startswith(prefix) and f['public_id'].endswith('.xlsx')]
     
-    if kat == "Semua Data": ff = files_in
-    elif kat == "Say Bread": ff = [f for f in files_in if "say bread" in f['public_id'].lower()]
-    elif kat == "Mr Bread": ff = [f for f in files_in if "mr bread" in f['public_id'].lower()]
-    elif kat == "Fried Chicken": ff = [f for f in files_in if "fried chicken" in f['public_id'].lower()]
-    elif kat == "Onigiri": ff = [f for f in files_in if "onigiri" in f['public_id'].lower()]
-    elif kat == "DRY": ff = [f for f in files_in if "dry" in f['public_id'].lower()]
-    else: ff = []
+    tab_mon, tab_input = st.tabs(["📂 Monitoring Data (Excel)", "🏭 Input Rusak Pabrik"])
+    
+    with tab_mon:
+        kat = st.radio("Filter:", ["Semua Data", "Say Bread", "Mr Bread", "Fried Chicken", "Onigiri", "DRY"], horizontal=True)
+        st.divider()
 
-    if not ff:
-        st.warning(f"File '{kat}' tidak ditemukan.")
-        return
+        prefix = folder_target + "/"
+        files_in = [f for f in semua_files if f['public_id'].startswith(prefix) and f['public_id'].endswith('.xlsx')]
+        
+        if kat == "Semua Data": ff = files_in
+        elif kat == "Say Bread": ff = [f for f in files_in if "say bread" in f['public_id'].lower()]
+        elif kat == "Mr Bread": ff = [f for f in files_in if "mr bread" in f['public_id'].lower()]
+        elif kat == "Fried Chicken": ff = [f for f in files_in if "fried chicken" in f['public_id'].lower()]
+        elif kat == "Onigiri": ff = [f for f in files_in if "onigiri" in f['public_id'].lower()]
+        elif kat == "DRY": ff = [f for f in files_in if "dry" in f['public_id'].lower()]
+        else: ff = []
 
-    dict_files = {f['public_id'].replace(prefix, ""): f['secure_url'] for f in ff}
-    unik = "area_rusak_special"
-    pilih = st.selectbox(f"Pilih File ({kat}):", list(dict_files.keys()), key=f"sel_{unik}")
-    if pilih: proses_tampilkan_excel(dict_files[pilih], unik)
+        if not ff:
+            st.warning(f"File '{kat}' tidak ditemukan.")
+        else:
+            dict_files = {f['public_id'].replace(prefix, ""): f['secure_url'] for f in ff}
+            unik = "area_rusak_special"
+            pilih = st.selectbox(f"Pilih File ({kat}):", list(dict_files.keys()), key=f"sel_{unik}")
+            if pilih: proses_tampilkan_excel(dict_files[pilih], unik)
+
+    with tab_input:
+        st.info("Formulir Input Berita Acara Rusak Pabrik")
+        with st.container(border=True):
+            col1, col2 = st.columns(2)
+            with col1:
+                in_kode = st.text_input("Kode Toko (Contoh: T001)")
+                in_nrb = st.text_input("Nomor NRB Rusak Pabrik")
+            with col2:
+                in_tgl = st.date_input("Tanggal NRB")
+            st.markdown("---")
+            in_foto = st.file_uploader("Upload Foto Berita Acara", type=['jpg', 'jpeg', 'png'])
+            st.caption("ℹ️ Foto otomatis dikompres & disimpan dalam folder Bulan saat ini.")
+            
+            if st.button("Kirim Laporan", type="primary", use_container_width=True):
+                if in_kode and in_nrb and in_foto:
+                    with st.spinner("Sedang memproses foto & data..."):
+                        sukses, pesan = simpan_data_rusak_pabrik(in_kode, in_nrb, in_tgl, in_foto)
+                        if sukses:
+                            st.success(pesan)
+                            st.balloons()
+                        else: st.error(pesan)
+                else: st.warning("Mohon lengkapi semua data.")
+        
+        st.write("")
+        with st.expander("Riwayat Inputan Anda (Hari Ini)"):
+            try:
+                raw_data = get_json_fresh(RUSAK_PABRIK_DB)
+                if isinstance(raw_data, list) and raw_data:
+                    df_rusak = pd.DataFrame(raw_data)
+                    curr_user = st.session_state.get('area_user_name', '')
+                    if curr_user:
+                        df_rusak = df_rusak[df_rusak['User_Input'] == curr_user]
+                    st.dataframe(df_rusak.tail(5), use_container_width=True) 
+                else: st.caption("Belum ada data.")
+            except: pass
 
 def tampilkan_viewer_area_intransit(folder_target, semua_files, kode_kontak=None):
     tampilkan_kontak(kode_kontak)
     st.markdown("### 🚛 Area - Intransit/Proforma")
-    
     kat = st.radio("Filter Kategori:", ["Semua Data", "NRB Intransit", "BPB/TAT Intransit"], horizontal=True)
-    
     if kat == "NRB Intransit":
         st.markdown("""<div style="background-color: #550000; padding: 10px; border-radius: 5px; margin-bottom: 10px; border: 1px solid red;"><marquee style="color: #ffcccc; font-weight: bold; font-size: 16px;">📢 JIKA NRB TELAH DIKIRIM KE DC/DEPO, TOLONG KONFIRMASI KE YANI IC</marquee></div>""", unsafe_allow_html=True)
     elif kat == "BPB/TAT Intransit":
         st.markdown("""<div style="background-color: #004400; padding: 10px; border-radius: 5px; margin-bottom: 10px; border: 1px solid green;"><marquee style="color: #ccffcc; font-weight: bold; font-size: 16px;">📢 JIKA BPB DAN TAT TELAH DIPROSES DAN FISIK DITERIMA TOKO, TOLONG KONFIRMASI KE TULASI IC</marquee></div>""", unsafe_allow_html=True)
-
     st.divider()
-
     prefix = folder_target + "/"
     files_in = [f for f in semua_files if f['public_id'].startswith(prefix) and f['public_id'].endswith('.xlsx')]
-    
     if kat == "Semua Data": ff = files_in
     elif kat == "NRB Intransit": ff = [f for f in files_in if "nrb" in f['public_id'].lower()]
     elif kat == "BPB/TAT Intransit": ff = [f for f in files_in if "bpb" in f['public_id'].lower() or "tat" in f['public_id'].lower()]
     else: ff = []
-
     if not ff:
         st.warning(f"File kategori '{kat}' tidak ditemukan.")
         return
-
     dict_files = {f['public_id'].replace(prefix, ""): f['secure_url'] for f in ff}
     unik = "area_intransit_special"
     pilih = st.selectbox(f"Pilih File ({kat}):", list(dict_files.keys()), key=f"sel_{unik}")
     if pilih: proses_tampilkan_excel(dict_files[pilih], unik)
+
+def tampilkan_galeri_foto(semua_files):
+    st.markdown("### 📸 Dokumentasi / Foto")
+    st.info("Kumpulan foto dokumentasi kegiatan.")
+    prefix = DOKUMENTASI_FOLDER + "/"
+    files_foto = [f for f in semua_files if f['public_id'].startswith(prefix) and f['resource_type'] == 'image']
+    if not files_foto:
+        st.warning("Belum ada foto yang diupload.")
+        return
+    cols = st.columns(3)
+    for i, file in enumerate(files_foto):
+        with cols[i % 3]:
+            url_thumb = file['secure_url'].replace("/upload/", "/upload/w_400,c_fill,q_auto/")
+            with st.container(border=True):
+                st.image(url_thumb, use_container_width=True)
+                nama_file = file['public_id'].replace(prefix, "")
+                st.caption(nama_file)
+                st.markdown(f"[📥 Download Asli]({file['secure_url']})")
 
 # --- MAIN APP ---
 def main():
@@ -363,7 +479,7 @@ def main():
 
     st.title("📊 Monitoring IC Bali")
     
-    menu_options = ["Area", "Internal IC", "DC", "Lapor Error", "🔐 Admin Panel", "🎨 Tampilan Web"]
+    menu_options = ["Area", "Internal IC", "DC", "📸 Dokumentasi", "Lapor Error", "🔐 Admin Panel", "🎨 Tampilan Web"]
     menu = st.radio("Navigasi:", menu_options, horizontal=True)
     st.divider()
 
@@ -423,11 +539,9 @@ def main():
                                     else:
                                         db_users[new_u] = hash_password(new_p)
                                         upload_json_to_cloud(db_users, USER_DB_PATH)
-                                        
                                         time.sleep(2)
                                         st.success(f"✅ Akun '{new_u}' Berhasil Dibuat!")
                                         st.info("Silakan pindah ke Tab 'Masuk' dan Login menggunakan password yang baru dibuat.")
-                                        
                             else: st.warning("Isi data dengan lengkap")
         else:
             c_info, c_out = st.columns([5, 1])
@@ -485,7 +599,11 @@ def main():
                 st.rerun()
             tampilkan_viewer("Data DC", ADMIN_CONFIG["DC_DATA"]["folder"], all_files, None)
 
-    # --- 4. LAPOR ERROR ---
+    # --- 4. DOKUMENTASI ---
+    elif menu == "📸 Dokumentasi":
+        tampilkan_galeri_foto(all_files)
+
+    # --- 5. LAPOR ERROR ---
     elif menu == "Lapor Error":
         st.subheader("🚨 Lapor Error")
         up = st.file_uploader("Upload Screenshot", type=['png', 'jpg', 'jpeg'])
@@ -495,7 +613,7 @@ def main():
                 st.success("terima kasih, error anda akan diselesaikan sesuai mood admin :)")
                 st.balloons()
     
-    # --- 5. ADMIN PANEL ---
+    # --- 6. ADMIN PANEL ---
     elif menu == "🔐 Admin Panel":
         st.subheader("⚙️ Kelola Data (Admin Only)")
         
@@ -504,7 +622,7 @@ def main():
             with c2:
                 with st.container(border=True):
                     st.write("Silakan Login sesuai Divisi")
-                    dept = st.selectbox("Departemen:", ["Area", "Internal IC", "DC"])
+                    dept = st.selectbox("Departemen:", ["Area", "Internal IC", "DC", "Dokumentasi"])
                     pilihan_sub = []
                     if dept == "Area":
                         pilihan_sub = [("Intransit", "AREA_INTRANSIT"), ("NKL", "AREA_NKL"), ("Barang Rusak", "AREA_RUSAK")]
@@ -512,6 +630,8 @@ def main():
                         pilihan_sub = [("Reporting", "INTERNAL_REP"), ("NKL", "INTERNAL_NKL"), ("Barang Rusak", "INTERNAL_RUSAK")]
                     elif dept == "DC":
                         pilihan_sub = [("Data DC", "DC_DATA")]
+                    elif dept == "Dokumentasi":
+                        pilihan_sub = [("Upload Foto", "DOKUMENTASI")]
                     
                     sub_nm, sub_kd = st.selectbox("Target Menu:", pilihan_sub, format_func=lambda x: x[0])
                     u = st.text_input("Username Admin")
@@ -532,69 +652,76 @@ def main():
             with c_out: 
                 if st.button("Logout"): st.session_state['admin_logged_in_key']=None; st.rerun()
             
-            tab_file, tab_user_mgr = st.tabs(["📂 Manajemen File", "👥 Manajemen User & Monitoring"])
+            tab_file, tab_user_mgr, tab_rusak_pabrik = st.tabs(["📂 Manajemen File/Foto", "👥 Manajemen User & Monitoring", "🏭 Rekap Rusak Pabrik"])
             
+            # 1. FILE MANAGER
             with tab_file:
                 col_up, col_del = st.columns(2)
                 with col_up:
-                    st.markdown("#### 📤 Upload File Baru")
+                    st.markdown(f"#### 📤 Upload ({cfg['label']})")
                     with st.container(border=True):
                         st.info(f"Target: `{cfg['folder']}`")
-                        up = st.file_uploader("Pilih Excel", type=['xlsx'], key="admin_up")
-                        if up and st.button("Mulai Upload", use_container_width=True):
-                            with st.spinner("Uploading..."):
-                                upload_file(up, cfg['folder'])
-                                get_all_files_cached.clear()
-                                st.success("Selesai!")
-                                st.rerun()
+                        
+                        if key == "DOKUMENTASI":
+                            up = st.file_uploader("Pilih Foto (JPG/PNG)", type=['jpg', 'jpeg', 'png'], accept_multiple_files=False, key="admin_up_foto")
+                            if up and st.button("Upload Foto", use_container_width=True):
+                                with st.spinner("Mengupload Foto..."):
+                                    upload_photo_to_cloud(up, cfg['folder'])
+                                    get_all_files_cached.clear()
+                                    st.success("Foto Berhasil Diupload!")
+                                    st.rerun()
+                        else:
+                            up = st.file_uploader("Pilih Excel", type=['xlsx'], key="admin_up_xls")
+                            if up and st.button("Upload Excel", use_container_width=True):
+                                with st.spinner("Uploading..."):
+                                    upload_file(up, cfg['folder'])
+                                    get_all_files_cached.clear()
+                                    st.success("Selesai!")
+                                    st.rerun()
 
                 with col_del:
                     st.markdown("#### 🗑️ Hapus File")
                     with st.container(border=True):
                         prefix = cfg['folder'] + "/"
-                        my_files = [f for f in all_files if f['public_id'].startswith(prefix)]
+                        my_files = []
+                        if key == "DOKUMENTASI":
+                            my_files = [f for f in all_files if f['public_id'].startswith(prefix) and f['resource_type'] == 'image']
+                        else:
+                            my_files = [f for f in all_files if f['public_id'].startswith(prefix) and f['resource_type'] == 'raw']
                         
                         if my_files:
                             d_del = {f['public_id'].replace(prefix, ""): f['public_id'] for f in my_files}
                             sel_del = st.selectbox("Pilih File:", list(d_del.keys()), key="admin_del")
                             if st.button("Hapus Permanen", type="primary", use_container_width=True):
                                 with st.spinner("Deleting..."):
-                                    hapus_file(d_del[sel_del])
+                                    res_type = "image" if key == "DOKUMENTASI" else "raw"
+                                    hapus_file(d_del[sel_del], res_type)
                                     get_all_files_cached.clear()
                                     st.success("Terhapus.")
                                     st.rerun()
                         else:
                             st.caption("Folder kosong.")
 
+            # 2. USER MANAGER
             with tab_user_mgr:
                 col_users, col_monitor = st.columns([1, 2])
                 with col_users:
                     st.markdown("#### 🛠️ Kelola User Area")
                     with st.container(border=True):
                         if st.button("🔄 Reload Data User"): st.rerun()
-                        # Gunakan Fresh DB untuk kelola user
                         db_users = get_json_fresh(USER_DB_PATH)
                         if db_users:
                             st.write(f"Total User: **{len(db_users)}**")
-                            
-                            # SELECT USER
                             pilih_user = st.selectbox("Pilih Username:", list(db_users.keys()), key="sel_user_mgr")
-                            
                             st.markdown("---")
-                            st.caption("Ganti Password:")
                             new_pass = st.text_input("Password Baru:", type="password", key="inp_new_pass")
                             if st.button("Simpan Password Baru", use_container_width=True):
                                 if new_pass:
                                     db_users[pilih_user] = hash_password(new_pass)
                                     upload_json_to_cloud(db_users, USER_DB_PATH)
                                     st.success(f"Password '{pilih_user}' berhasil diubah!")
-                                    time.sleep(1)
-                                    st.rerun()
                                 else: st.warning("Password kosong!")
-                            
                             st.markdown("---")
-                            st.caption("Hapus User:")
-                            # FITUR BARU: HAPUS USER
                             if st.button("❌ Hapus User Ini", type="primary", use_container_width=True):
                                 try:
                                     del db_users[pilih_user]
@@ -602,18 +729,14 @@ def main():
                                     st.success(f"User '{pilih_user}' telah dihapus!")
                                     time.sleep(1)
                                     st.rerun()
-                                except Exception as e:
-                                    st.error(f"Gagal: {e}")
-
+                                except: st.error("Gagal")
                         else: st.info("Belum ada user.")
 
                 with col_monitor:
                     st.markdown("#### 📊 Monitoring Aktivitas")
                     with st.container(border=True):
                         if st.button("🔄 Refresh Monitoring"): st.rerun()
-                        # Gunakan Fresh Log
                         log_data = get_json_fresh(LOG_DB_PATH)
-                        
                         if log_data:
                             rekap_list = []
                             total_hits = 0
@@ -621,26 +744,96 @@ def main():
                                 for usr, count in users.items():
                                     rekap_list.append({"Tanggal": tgl, "Username": usr, "Jumlah Akses": count})
                                     total_hits += count
-                            
                             df_log = pd.DataFrame(rekap_list)
                             df_log = df_log.sort_values(by="Tanggal", ascending=False)
-                            
                             m1, m2 = st.columns(2)
                             m1.metric("Total Login (All Time)", total_hits)
-                            
                             st.dataframe(df_log, use_container_width=True, height=300)
-                            
                             csv_log = df_log.to_csv(index=False).encode('utf-8')
-                            st.download_button(
-                                label="📥 Download Log (CSV)", 
-                                data=csv_log, 
-                                file_name="Activity_Log.csv", 
-                                mime="text/csv", 
-                                use_container_width=True
-                            )
+                            st.download_button("📥 Download Log (CSV)", csv_log, "Activity_Log.csv", "text/csv", use_container_width=True)
                         else: st.info("Log aktivitas kosong.")
 
-    # --- 6. TAMPILAN WEB ---
+            # 3. REKAP RUSAK PABRIK (DENGAN FITUR HAPUS SEMUA BULANAN)
+            with tab_rusak_pabrik:
+                st.markdown("#### 🏭 Rekap & Download Foto Rusak Pabrik")
+                
+                # --- PENCARIAN ---
+                c_toko, c_nrb, c_bln = st.columns(3)
+                with c_toko: cari_toko = st.text_input("Kode Toko:", placeholder="T001")
+                with c_nrb: cari_nrb = st.text_input("No NRB:", placeholder="12345")
+                with c_bln: cari_bulan = st.text_input("Bulan (YYYY-MM):", placeholder="2026-01")
+
+                if st.button("🔍 Cari Foto", use_container_width=True):
+                    data_rusak = get_json_fresh(RUSAK_PABRIK_DB)
+                    if isinstance(data_rusak, list) and data_rusak:
+                        df_rusak = pd.DataFrame(data_rusak)
+                        mask = pd.Series([True] * len(df_rusak))
+                        if cari_toko: mask &= df_rusak['Kode_Toko'].str.contains(cari_toko.upper(), na=False)
+                        if cari_nrb: mask &= df_rusak['No_NRB'].str.contains(cari_nrb.upper(), na=False)
+                        if cari_bulan: mask &= (df_rusak['Tanggal_NRB'].astype(str).str.contains(cari_bulan) | df_rusak.get('Bulan_Upload', '').astype(str).str.contains(cari_bulan))
+                        
+                        hasil = df_rusak[mask]
+                        if not hasil.empty:
+                            st.success(f"Ditemukan {len(hasil)} Data.")
+                            for index, row in hasil.iterrows():
+                                with st.container(border=True):
+                                    c_img, c_det = st.columns([1, 2])
+                                    with c_img:
+                                        thumb = row['Bukti_Foto'].replace("/upload/", "/upload/w_200,c_scale/")
+                                        st.image(thumb, width=150)
+                                    with c_det:
+                                        st.write(f"**{row['Kode_Toko']} - NRB {row['No_NRB']}**")
+                                        st.caption(f"Tgl: {row['Tanggal_NRB']}")
+                                        dl = row['Bukti_Foto'].replace("/upload/", "/upload/fl_attachment/")
+                                        st.markdown(f"[📥 Download]({dl})")
+                        else: st.warning("Data tidak ditemukan.")
+                    else: st.info("Database kosong.")
+
+                st.divider()
+                st.markdown("#### 📋 Tabel Semua Data")
+                if st.button("🔄 Refresh Tabel"): st.rerun()
+                try:
+                    raw_data = get_json_fresh(RUSAK_PABRIK_DB)
+                    if isinstance(raw_data, list) and raw_data:
+                        df_table = pd.DataFrame(raw_data)
+                        if "Input_Time" in df_table.columns: df_table = df_table.sort_values(by="Input_Time", ascending=False)
+                        st.dataframe(df_table, use_container_width=True)
+                        csv_rsk = df_table.to_csv(index=False).encode('utf-8')
+                        st.download_button("📥 Download Rekap (CSV)", csv_rsk, "Rekap_Rusak.csv", "text/csv", use_container_width=True)
+                except: pass
+
+                # --- DANGER ZONE: HAPUS SEMUA BULANAN ---
+                st.write("")
+                with st.expander("🚨 Danger Zone: Hapus Data Bulanan (Bersih-bersih)"):
+                    st.error("Perhatian: Fitur ini akan menghapus SELURUH foto dan data pada bulan yang dipilih. Tidak bisa dibatalkan!")
+                    
+                    # Ambil list bulan yang ada di database
+                    raw_data_del = get_json_fresh(RUSAK_PABRIK_DB)
+                    list_bulan = []
+                    if isinstance(raw_data_del, list):
+                        list_bulan = sorted(list(set([d.get('Bulan_Upload') for d in raw_data_del if d.get('Bulan_Upload')])))
+                    
+                    if list_bulan:
+                        bulan_target = st.selectbox("Pilih Bulan yang akan dihapus total:", list_bulan)
+                        pass_confirm = st.text_input("Masukkan Password Konfirmasi (123456):", type="password")
+                        confirm_check = st.checkbox(f"Saya yakin ingin menghapus semua data bulan {bulan_target}")
+                        
+                        if st.button("🔥 Hapus Semua Data Bulan Ini", type="primary"):
+                            if pass_confirm == "123456" and confirm_check:
+                                with st.spinner("Menghapus data di Cloudinary & Database..."):
+                                    sukses_del, msg_del = hapus_data_bulan_tertentu(bulan_target)
+                                    if sukses_del:
+                                        st.success(msg_del)
+                                        time.sleep(2)
+                                        st.rerun()
+                                    else:
+                                        st.error(msg_del)
+                            else:
+                                st.warning("Password salah atau checkbox belum dicentang.")
+                    else:
+                        st.info("Tidak ada data bulan yang bisa dihapus.")
+
+    # --- 7. TAMPILAN WEB ---
     elif menu == "🎨 Tampilan Web":
         st.subheader("🎨 Pengaturan Tampilan")
         c1, c2 = st.columns([1, 2])
@@ -648,14 +841,8 @@ def main():
             with st.container(border=True):
                 opts = ["System", "Light", "Dark"]
                 if st.session_state['current_theme'] not in opts: st.session_state['current_theme'] = "System"
-                
-                # Check agar index tidak error
-                try:
-                    curr = opts.index(st.session_state['current_theme'])
-                except:
-                    st.session_state['current_theme'] = "System"
-                    curr = 0
-                    
+                try: curr = opts.index(st.session_state['current_theme'])
+                except: st.session_state['current_theme']="System"; curr=0
                 sel = st.radio("Mode:", opts, index=curr)
                 if sel != st.session_state['current_theme']: st.session_state['current_theme'] = sel; st.rerun()
         st.info(f"Mode: **{st.session_state['current_theme']}**")
