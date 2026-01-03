@@ -9,6 +9,7 @@ import requests
 import io
 import json
 import time
+import os
 from datetime import datetime, timedelta
 
 # --- 1. KONFIGURASI HALAMAN ---
@@ -24,16 +25,12 @@ LOG_DB_PATH = "Config/activity_log_area.json"
 RUSAK_PABRIK_DB = "Config/data_rusak_pabrik.json" 
 RUSAK_PABRIK_IMG_FOLDER = "Area/RusakPabrik/Foto"
 
-# [PENTING] MASUKKAN LINK GAMBAR CONTOH BA DI SINI
-# Upload dulu gambarnya ke Cloudinary, lalu copy link-nya dan taruh di bawah ini:
-URL_CONTOH_BA = "https://res.cloudinary.com/ddtgzywhh/image/upload/v1767447590/Screenshot_2026-01-03_203956_iawczb.png" 
-# ^ Ganti link di atas dengan link gambar BA Anda sendiri ^
-
 # --- 3. CSS & TEMA ---
 def atur_tema():
     if 'current_theme' not in st.session_state:
         st.session_state['current_theme'] = "System" 
 
+    # CSS Global (Hide Toolbar & Fix Layout)
     st.markdown("""
         <style>
             [data-testid="stToolbar"] {visibility: hidden; display: none !important;}
@@ -51,6 +48,8 @@ def atur_tema():
         <style>
             .stApp { background-color: #0E1117; color: #FFFFFF; }
             h1, h2, h3, h4, h5, h6, p, span, div, label, .stMarkdown { color: #FFFFFF !important; }
+            
+            /* Fix Input Box di Dark Mode agar Teks Hitam di Latar Putih */
             div[data-baseweb="select"] > div, div[data-baseweb="input"] > div {
                 background-color: #FFFFFF !important; border: 1px solid #ccc !important;
             }
@@ -120,11 +119,6 @@ def upload_file(file_upload, folder_path):
     res = cloudinary.uploader.upload(file_upload, resource_type="raw", public_id=public_id_path, overwrite=True)
     return res
 
-def upload_photo_to_cloud(image_file, folder_path):
-    public_id_path = f"{folder_path}/{image_file.name.split('.')[0]}"
-    res = cloudinary.uploader.upload(image_file, resource_type="image", public_id=public_id_path, overwrite=True)
-    return res
-
 def upload_image_error(image_file):
     res = cloudinary.uploader.upload(image_file, folder="ReportError", resource_type="image")
     return res
@@ -136,8 +130,9 @@ def hapus_file(public_id, res_type="raw"):
     except:
         return False
 
-# --- FUNGSI DATABASE ---
+# --- FUNGSI DATABASE (REALTIME) ---
 def get_json_fresh(public_id):
+    """Mengambil file JSON terbaru dengan bypass cache"""
     try:
         resource = cloudinary.api.resource(public_id, resource_type="raw")
         url = resource.get('secure_url')
@@ -150,8 +145,8 @@ def get_json_fresh(public_id):
     except:
         return {}
 
-def upload_json_to_cloud(data_obj, public_id):
-    json_data = json.dumps(data_obj)
+def upload_json_to_cloud(data_dict, public_id):
+    json_data = json.dumps(data_dict)
     cloudinary.uploader.upload(
         io.BytesIO(json_data.encode('utf-8')), 
         resource_type="raw", 
@@ -164,8 +159,13 @@ def catat_login_activity(username):
         log_data = get_json_fresh(LOG_DB_PATH)
         now = datetime.utcnow() + timedelta(hours=8)
         tanggal_str = now.strftime("%Y-%m-%d")
-        if tanggal_str not in log_data: log_data[tanggal_str] = {}
-        if username not in log_data[tanggal_str]: log_data[tanggal_str][username] = 0
+        
+        if tanggal_str not in log_data:
+            log_data[tanggal_str] = {}
+        
+        if username not in log_data[tanggal_str]:
+            log_data[tanggal_str][username] = 0
+            
         log_data[tanggal_str][username] += 1
         upload_json_to_cloud(log_data, LOG_DB_PATH)
     except Exception as e: print(f"Log Error: {e}")
@@ -176,6 +176,11 @@ def hash_password(password):
 # --- FUNGSI KHUSUS RUSAK PABRIK ---
 def simpan_data_rusak_pabrik(kode_toko, no_nrb, tgl_nrb, file_foto):
     try:
+        # VALIDASI KODE TOKO (4 DIGIT ALPHANUMERIC)
+        if len(kode_toko) != 4:
+            return False, "⚠️ Gagal: Kode Toko harus tepat 4 karakter."
+
+        # Cek Ukuran File 2MB
         if file_foto.size > 2 * 1024 * 1024:
             return False, "⚠️ Gagal: Ukuran foto melebihi 2 MB. Silakan Screenshot dulu atau kompres."
 
@@ -380,40 +385,17 @@ def tampilkan_viewer_area_rusak(folder_target, semua_files, kode_kontak=None):
             if pilih: proses_tampilkan_excel(dict_files[pilih], unik)
 
     with tab_input:
-        st.markdown("#### 📄 Formulir Input Berita Acara")
-        
-        # --- FITUR CONTOH GAMBAR (BARU) ---
-        with st.expander("ℹ️ Lihat Contoh Format BA (Klik Disini)"):
-            c_img_ex, c_dl_ex = st.columns([1, 1])
-            with c_img_ex:
-                # Ganti URL ini dengan URL gambar contoh BA Anda sendiri yang valid
-                st.image(URL_CONTOH_BA, caption="Contoh Format BA", use_container_width=True)
-            with c_dl_ex:
-                st.info("Pastikan foto yang diupload jelas dan sesuai format di samping.")
-                # Tombol download contoh gambar (mengambil dari URL)
-                try:
-                    # Ambil bytes gambar untuk download
-                    img_resp = requests.get(URL_CONTOH_BA)
-                    st.download_button(
-                        label="📥 Download Contoh Format BA",
-                        data=img_resp.content,
-                        file_name="Contoh_Format_BA.jpg",
-                        mime="image/jpeg"
-                    )
-                except:
-                    st.warning("Gagal menyiapkan tombol download contoh.")
-
-        st.write("")
+        st.info("Formulir Input Berita Acara Rusak Pabrik")
         with st.container(border=True):
             col1, col2 = st.columns(2)
             with col1:
-                in_kode = st.text_input("Kode Toko (Contoh: T001)")
-                in_nrb = st.text_input("Nomor NRB Rusak Pabrik")
+                in_kode = st.text_input("Kode Toko (4 Digit)", max_chars=4, placeholder="Cth: F08C")
             with col2:
-                in_tgl = st.date_input("Tanggal NRB")
+                in_nrb = st.text_input("Nomor NRB Rusak Pabrik")
+            in_tgl = st.date_input("Tanggal NRB")
             st.markdown("---")
             in_foto = st.file_uploader("Upload Foto Berita Acara", type=['jpg', 'jpeg', 'png'])
-            st.caption("ℹ️ Size maksimal 2 MB. Jika lebih, harap screenshot/kompres dulu.")
+            st.caption("ℹ️ Size maksimal 2 MB. Jika hasil foto lebih besar harap screenshot dahulu lalu upload ulang.")
             
             if st.button("Kirim Laporan", type="primary", use_container_width=True):
                 if in_kode and in_nrb and in_foto:
@@ -426,6 +408,15 @@ def tampilkan_viewer_area_rusak(folder_target, semua_files, kode_kontak=None):
                             st.error(pesan)
                 else:
                     st.warning("Mohon lengkapi semua data.")
+        
+        st.write("")
+        with st.expander("ℹ️ Lihat Contoh Format BA (Klik Disini)"):
+            c_img_ex, c_dl_ex = st.columns([1, 1])
+            with c_img_ex:
+                # Ganti URL_CONTOH_BA di bagian atas kode jika ingin gambar sendiri
+                st.image("https://res.cloudinary.com/ddtgzywhh/image/upload/v1767447590/Screenshot_2026-01-03_203956_iawczb.png", caption="Contoh Format BA", use_container_width=True)
+            with c_dl_ex:
+                st.info("Pastikan foto yang diupload jelas dan sesuai format di samping.")
         
         st.write("")
         with st.expander("Riwayat Inputan Anda (Hari Ini)"):
@@ -485,7 +476,25 @@ def main():
         if not st.session_state['auth_area']:
             c1, c2, c3 = st.columns([1, 2, 1])
             with c2:
+                # FITUR DOWNLOAD JUKLAK
                 st.info("🔒 Silakan Login untuk akses menu Area")
+                
+                # Cek file lokal 'juklak.pdf'
+                juklak_file = "juklak.pdf"
+                if os.path.exists(juklak_file):
+                    with open(juklak_file, "rb") as f:
+                        st.download_button(
+                            label="📥 Download Buku Panduan (Juklak)",
+                            data=f,
+                            file_name="Panduan_Web_Monitoring.pdf",
+                            mime="application/pdf",
+                            use_container_width=True
+                        )
+                else:
+                    st.warning("⚠️ File 'juklak.pdf' belum diupload ke GitHub.")
+
+                st.write("") 
+
                 tab_login, tab_daftar = st.tabs(["Masuk (Login)", "Daftar Akun Baru"])
                 
                 with tab_login:
@@ -643,7 +652,7 @@ def main():
             with c_out: 
                 if st.button("Logout"): st.session_state['admin_logged_in_key']=None; st.rerun()
             
-            tab_file, tab_user_mgr, tab_rusak_pabrik = st.tabs(["📂 Manajemen File", "👥 Manajemen User & Monitoring", "🏭 Rekap Rusak Pabrik"])
+            tab_file, tab_user_mgr, tab_rusak_pabrik = st.tabs(["📂 Manajemen File/Foto", "👥 Manajemen User & Monitoring", "🏭 Rekap Rusak Pabrik"])
             
             with tab_file:
                 col_up, col_del = st.columns(2)
@@ -694,6 +703,8 @@ def main():
                                     db_users[pilih_user] = hash_password(new_pass)
                                     upload_json_to_cloud(db_users, USER_DB_PATH)
                                     st.success(f"Password '{pilih_user}' berhasil diubah!")
+                                    time.sleep(1)
+                                    st.rerun()
                                 else: st.warning("Password kosong!")
                             st.markdown("---")
                             if st.button("❌ Hapus User Ini", type="primary", use_container_width=True):
