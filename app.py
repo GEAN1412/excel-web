@@ -24,6 +24,11 @@ LOG_DB_PATH = "Config/activity_log_area.json"
 RUSAK_PABRIK_DB = "Config/data_rusak_pabrik.json" 
 RUSAK_PABRIK_IMG_FOLDER = "Area/RusakPabrik/Foto"
 
+# [PENTING] MASUKKAN LINK GAMBAR CONTOH BA DI SINI
+# Upload dulu gambarnya ke Cloudinary, lalu copy link-nya dan taruh di bawah ini:
+URL_CONTOH_BA = "https://res.cloudinary.com/ddtgzywhh/image/upload/v1767447590/Screenshot_2026-01-03_203956_iawczb.png" 
+# ^ Ganti link di atas dengan link gambar BA Anda sendiri ^
+
 # --- 3. CSS & TEMA ---
 def atur_tema():
     if 'current_theme' not in st.session_state:
@@ -115,6 +120,11 @@ def upload_file(file_upload, folder_path):
     res = cloudinary.uploader.upload(file_upload, resource_type="raw", public_id=public_id_path, overwrite=True)
     return res
 
+def upload_photo_to_cloud(image_file, folder_path):
+    public_id_path = f"{folder_path}/{image_file.name.split('.')[0]}"
+    res = cloudinary.uploader.upload(image_file, resource_type="image", public_id=public_id_path, overwrite=True)
+    return res
+
 def upload_image_error(image_file):
     res = cloudinary.uploader.upload(image_file, folder="ReportError", resource_type="image")
     return res
@@ -163,10 +173,9 @@ def catat_login_activity(username):
 def hash_password(password):
     return hashlib.sha256(str.encode(password)).hexdigest()
 
-# --- FUNGSI KHUSUS RUSAK PABRIK (LIMIT 2MB) ---
+# --- FUNGSI KHUSUS RUSAK PABRIK ---
 def simpan_data_rusak_pabrik(kode_toko, no_nrb, tgl_nrb, file_foto):
     try:
-        # Cek Ukuran File 2MB (2 * 1024 * 1024 bytes)
         if file_foto.size > 2 * 1024 * 1024:
             return False, "⚠️ Gagal: Ukuran foto melebihi 2 MB. Silakan Screenshot dulu atau kompres."
 
@@ -178,7 +187,6 @@ def simpan_data_rusak_pabrik(kode_toko, no_nrb, tgl_nrb, file_foto):
         nama_file_unik = f"{kode_clean}_{nrb_clean}_{tgl_str}"
         public_id = f"{RUSAK_PABRIK_IMG_FOLDER}/{folder_bulan}/{nama_file_unik}"
         
-        # Upload
         res = cloudinary.uploader.upload(
             file_foto, 
             resource_type="image", 
@@ -372,7 +380,30 @@ def tampilkan_viewer_area_rusak(folder_target, semua_files, kode_kontak=None):
             if pilih: proses_tampilkan_excel(dict_files[pilih], unik)
 
     with tab_input:
-        st.info("Formulir Input Berita Acara Rusak Pabrik")
+        st.markdown("#### 📄 Formulir Input Berita Acara")
+        
+        # --- FITUR CONTOH GAMBAR (BARU) ---
+        with st.expander("ℹ️ Lihat Contoh Format BA (Klik Disini)"):
+            c_img_ex, c_dl_ex = st.columns([1, 1])
+            with c_img_ex:
+                # Ganti URL ini dengan URL gambar contoh BA Anda sendiri yang valid
+                st.image(URL_CONTOH_BA, caption="Contoh Format BA", use_container_width=True)
+            with c_dl_ex:
+                st.info("Pastikan foto yang diupload jelas dan sesuai format di samping.")
+                # Tombol download contoh gambar (mengambil dari URL)
+                try:
+                    # Ambil bytes gambar untuk download
+                    img_resp = requests.get(URL_CONTOH_BA)
+                    st.download_button(
+                        label="📥 Download Contoh Format BA",
+                        data=img_resp.content,
+                        file_name="Contoh_Format_BA.jpg",
+                        mime="image/jpeg"
+                    )
+                except:
+                    st.warning("Gagal menyiapkan tombol download contoh.")
+
+        st.write("")
         with st.container(border=True):
             col1, col2 = st.columns(2)
             with col1:
@@ -382,9 +413,7 @@ def tampilkan_viewer_area_rusak(folder_target, semua_files, kode_kontak=None):
                 in_tgl = st.date_input("Tanggal NRB")
             st.markdown("---")
             in_foto = st.file_uploader("Upload Foto Berita Acara", type=['jpg', 'jpeg', 'png'])
-            
-            # --- UPDATE KETERANGAN DI SINI ---
-            st.caption("size maksmimal 2 MB, jika hasil foto lebih besar harap screenshot dahulu lalu upload ulang")
+            st.caption("ℹ️ Size maksimal 2 MB. Jika lebih, harap screenshot/kompres dulu.")
             
             if st.button("Kirim Laporan", type="primary", use_container_width=True):
                 if in_kode and in_nrb and in_foto:
@@ -447,7 +476,6 @@ def main():
 
     st.title("📊 Monitoring IC Bali")
     
-    # --- UPDATE: HAPUS MENU DOKUMENTASI DARI LIST ---
     menu_options = ["Area", "Internal IC", "DC", "Lapor Error", "🔐 Admin Panel", "🎨 Tampilan Web"]
     menu = st.radio("Navigasi:", menu_options, horizontal=True)
     st.divider()
@@ -587,7 +615,6 @@ def main():
             with c2:
                 with st.container(border=True):
                     st.write("Silakan Login sesuai Divisi")
-                    # UPDATE DROPDOWN ADMIN
                     dept = st.selectbox("Departemen:", ["Area", "Internal IC", "DC"])
                     pilihan_sub = []
                     if dept == "Area":
@@ -618,7 +645,6 @@ def main():
             
             tab_file, tab_user_mgr, tab_rusak_pabrik = st.tabs(["📂 Manajemen File", "👥 Manajemen User & Monitoring", "🏭 Rekap Rusak Pabrik"])
             
-            # 1. FILE MANAGER
             with tab_file:
                 col_up, col_del = st.columns(2)
                 with col_up:
@@ -651,7 +677,6 @@ def main():
                         else:
                             st.caption("Folder kosong.")
 
-            # 2. USER MANAGER
             with tab_user_mgr:
                 col_users, col_monitor = st.columns([1, 2])
                 with col_users:
@@ -702,10 +727,8 @@ def main():
                             st.download_button("📥 Download Log (CSV)", csv_log, "Activity_Log.csv", "text/csv", use_container_width=True)
                         else: st.info("Log aktivitas kosong.")
 
-            # 3. REKAP RUSAK PABRIK
             with tab_rusak_pabrik:
                 st.markdown("#### 🏭 Rekap & Download Foto Rusak Pabrik")
-                
                 c_toko, c_nrb, c_bln = st.columns(3)
                 with c_toko: cari_toko = st.text_input("Kode Toko:", placeholder="T001")
                 with c_nrb: cari_nrb = st.text_input("No NRB:", placeholder="12345")
